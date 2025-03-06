@@ -64,6 +64,19 @@ void ARHardwareInterface::init_variables() {
   }
 }
 
+hardware_interface::CallbackReturn ARHardwareInterface::home_robot() {
+  RCLCPP_INFO(logger_, "Homing started...");
+
+  // if (!driver_.calibrateJoints()) {
+  //   RCLCPP_INFO(logger_, "calibration failed.");
+  //   return hardware_interface::CallbackReturn::ERROR;
+  // }
+
+  RCLCPP_INFO(logger_, "Homing completed.");
+  return hardware_interface::CallbackReturn::SUCCESS;
+}
+
+
 hardware_interface::CallbackReturn ARHardwareInterface::on_activate(
     const rclcpp_lifecycle::State& /*previous_state*/) {
   RCLCPP_INFO(logger_, "Activating hardware interface...");
@@ -124,6 +137,13 @@ hardware_interface::return_type ARHardwareInterface::read(
 
 hardware_interface::return_type ARHardwareInterface::write(
     const rclcpp::Time& /*time*/, const rclcpp::Duration& /*period*/) {
+
+  if (homing_requested_) {
+    home_robot();
+    homing_requested_ = false; // Reset flag
+    return hardware_interface::return_type::OK;
+  }
+
   for (size_t i = 0; i < info_.joints.size(); ++i) {
     // convert from rad to deg, apply offsets
     actuator_pos_commands_[i] =

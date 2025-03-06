@@ -30,6 +30,9 @@ class ARHardwareInterface : public hardware_interface::SystemInterface {
   hardware_interface::return_type write(
       const rclcpp::Time& time, const rclcpp::Duration& period) override;
 
+  // New homing function
+  hardware_interface::CallbackReturn home_robot();
+
  private:
   rclcpp::Logger logger_ = rclcpp::get_logger("annin_ar4_driver");
   rclcpp::Clock clock_ = rclcpp::Clock(RCL_ROS_TIME);
@@ -49,6 +52,9 @@ class ARHardwareInterface : public hardware_interface::SystemInterface {
   std::vector<double> joint_position_commands_;
   std::vector<double> joint_velocity_commands_;
   std::vector<double> joint_effort_commands_;
+
+  // Homing flag
+  bool homing_requested_ = false;
 
   // Misc
   void init_variables();
