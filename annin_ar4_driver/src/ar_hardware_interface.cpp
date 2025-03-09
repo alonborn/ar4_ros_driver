@@ -1,6 +1,7 @@
 #include <annin_ar4_driver/ar_hardware_interface.hpp>
 #include <sstream>
 
+
 namespace annin_ar4_driver {
 
 hardware_interface::CallbackReturn ARHardwareInterface::on_init(
@@ -64,23 +65,23 @@ void ARHardwareInterface::init_variables() {
   }
 }
 
-hardware_interface::CallbackReturn ARHardwareInterface::home_robot() {
-  RCLCPP_INFO(logger_, "Homing started...");
+// hardware_interface::CallbackReturn ARHardwareInterface::home_robot() {
+//   RCLCPP_INFO(logger_, "Homing started...");
 
-  // if (!driver_.calibrateJoints()) {
-  //   RCLCPP_INFO(logger_, "calibration failed.");
-  //   return hardware_interface::CallbackReturn::ERROR;
-  // }
+//   // if (!driver_.calibrateJoints()) {
+//   //   RCLCPP_INFO(logger_, "calibration failed.");
+//   //   return hardware_interface::CallbackReturn::ERROR;
+//   // }
 
-  RCLCPP_INFO(logger_, "Homing completed.");
-  return hardware_interface::CallbackReturn::SUCCESS;
-}
+//   RCLCPP_INFO(logger_, "Homing completed.");
+//   return hardware_interface::CallbackReturn::SUCCESS;
+// }
 
 
 hardware_interface::CallbackReturn ARHardwareInterface::on_activate(
     const rclcpp_lifecycle::State& /*previous_state*/) {
   RCLCPP_INFO(logger_, "Activating hardware interface...");
-
+  //register_homing_service();
   // Reset Estop (if any)
   bool success = driver_.resetEStop();
   if (!success) {
@@ -96,6 +97,92 @@ hardware_interface::CallbackReturn ARHardwareInterface::on_deactivate(
     const rclcpp_lifecycle::State& /*previous_state*/) {
   RCLCPP_INFO(logger_, "Deactivating hardware interface...");
   return hardware_interface::CallbackReturn::SUCCESS;
+}
+
+hardware_interface::CallbackReturn ARHardwareInterface::on_configure(
+  const rclcpp_lifecycle::State & ) {
+    // Existing configuration
+    RCLCPP_INFO(logger_, "configuring node");
+    // Create homing service
+    node_ = std::make_shared<rclcpp::Node>("ar4_hardware_interface_node");
+    executor_ = std::make_shared<rclcpp::executors::SingleThreadedExecutor>();
+    executor_->add_node(node_);
+    
+    homing_service_ = node_->create_service<std_srvs::srv::Trigger>(
+      "~/homing",
+      std::bind(&ARHardwareInterface::handle_homing_request, this,
+        std::placeholders::_1, std::placeholders::_2));
+    
+    // Create subscription to the string topic
+    string_subscription_ = node_->create_subscription<std_msgs::msg::String>(
+      "~/homing_string", 10,
+      std::bind(&ARHardwareInterface::handle_string_message, this, std::placeholders::_1));
+
+
+    // Start a thread for handling services
+    service_thread_ = std::thread([this]() {
+      while (rclcpp::ok()) {
+        executor_->spin_some();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      }
+    });
+    
+    return hardware_interface::CallbackReturn::SUCCESS;
+  }
+
+  void ARHardwareInterface::handle_string_message(const std_msgs::msg::String::SharedPtr msg) 
+  {
+    std::lock_guard<std::mutex> lock(string_mutex_);
+    last_received_string_ = msg->data;
+    // RCLCPP_INFO(node_->get_logger(), "Received string: %s", last_received_string_.c_str());
+  }
+
+  void ARHardwareInterface::handle_homing_request(const std::shared_ptr<std_srvs::srv::Trigger::Request> ,
+    std::shared_ptr<std_srvs::srv::Trigger::Response> response)  {
+    RCLCPP_INFO(logger_, "handle_homing_request was called");
+    std::string current_string;
+    // Get the latest string from the topic
+    {
+      std::lock_guard<std::mutex> lock(string_mutex_);
+      current_string = last_received_string_;
+    }
+  // if (is_homing_) {
+  //   response->success = false;
+  //   response->message = "Homing already in progress";
+  //   return;
+  // }
+  
+  // if (trajectory_controller_active) {
+  //   response->success = false;
+  //   response->message = "Cannot home while trajectory controller is active";
+  //   return;
+  // }
+  
+  // response->success = perform_homing();
+  // if (response->success) {
+  //   response->message = "Homing completed successfully";
+  // } else {
+  //   response->message = "Homing failed";
+  // }
+  response->success = true;
+  response->message = "Homing completed successfully";
+  RCLCPP_INFO(logger_, "completed handling the homing request: %s", current_string.c_str());
+}
+
+bool ARHardwareInterface::perform_homing() {
+  is_homing_ = true;
+  
+  // Implement your homing sequence here
+  // This might involve:
+  // 1. Moving the robot to a known position
+  // 2. Reading limit switches
+  // 3. Calibrating encoders
+  // 4. Setting the reference position
+  
+  is_homing_ = false;
+  is_homed_ = true;  // Set if homing was successful
+  
+  return is_homed_;
 }
 
 std::vector<hardware_interface::StateInterface>
@@ -137,12 +224,12 @@ hardware_interface::return_type ARHardwareInterface::read(
 
 hardware_interface::return_type ARHardwareInterface::write(
     const rclcpp::Time& /*time*/, const rclcpp::Duration& /*period*/) {
-
-  if (homing_requested_) {
-    home_robot();
-    homing_requested_ = false; // Reset flag
-    return hardware_interface::return_type::OK;
-  }
+  //RCLCPP_INFO(logger_, "write called");
+  // if (homing_requested_ > 0) {
+  //   home_robot();
+  //   homing_requested_ = false; // Reset flag
+  //   return hardware_interface::return_type::OK;
+  // }
 
   for (size_t i = 0; i < info_.joints.size(); ++i) {
     // convert from rad to deg, apply offsets

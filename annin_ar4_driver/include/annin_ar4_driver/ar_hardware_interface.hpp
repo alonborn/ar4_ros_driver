@@ -7,6 +7,8 @@
 #include <thread>
 
 #include "annin_ar4_driver/teensy_driver.hpp"
+#include "std_srvs/srv/trigger.hpp"
+#include "std_msgs/msg/string.hpp"
 
 using namespace hardware_interface;
 
@@ -29,11 +31,33 @@ class ARHardwareInterface : public hardware_interface::SystemInterface {
                                        const rclcpp::Duration& period) override;
   hardware_interface::return_type write(
       const rclcpp::Time& time, const rclcpp::Duration& period) override;
+  hardware_interface::CallbackReturn on_configure(
+        const rclcpp_lifecycle::State & previous_state) override;
+        
+  // New method for homing
 
-  // New homing function
-  hardware_interface::CallbackReturn home_robot();
+
+  void handle_homing_request(
+    const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+    std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+  bool perform_homing();
 
  private:
+
+  std::shared_ptr<rclcpp::Node> node_;
+  std::shared_ptr<rclcpp::executors::SingleThreadedExecutor> executor_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr homing_service_;
+  std::thread service_thread_;
+
+  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr string_subscription_;
+  void handle_string_message(const std_msgs::msg::String::SharedPtr msg);
+
+  bool is_homing_ = false;
+  bool is_homed_ = false;
+  
+  std::mutex string_mutex_;
+  std::string last_received_string_;
+
   rclcpp::Logger logger_ = rclcpp::get_logger("annin_ar4_driver");
   rclcpp::Clock clock_ = rclcpp::Clock(RCL_ROS_TIME);
 
@@ -60,5 +84,6 @@ class ARHardwareInterface : public hardware_interface::SystemInterface {
   void init_variables();
   double degToRad(double deg) { return deg / 180.0 * M_PI; };
   double radToDeg(double rad) { return rad / M_PI * 180.0; };
+
 };
 }  // namespace annin_ar4_driver

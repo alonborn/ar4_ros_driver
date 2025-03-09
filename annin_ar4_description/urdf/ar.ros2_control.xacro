@@ -121,7 +121,6 @@
         </state_interface>
         <param name="position_offset">${joint_offset_parameters['joint_6']}</param>
       </joint>
-
     </ros2_control>
   </xacro:macro>
 </robot>
