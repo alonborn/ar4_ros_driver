@@ -237,6 +237,11 @@ void setupSteppersMK2() {
   }
 }
 
+void SendToROS(String data) {
+  Serial.println(data);
+  logThrottled(data);
+}
+
 void setupSteppersMK3() {
   // initialise AccelStepper instance
   for (int i = 0; i < NUM_JOINTS; ++i) {
@@ -326,7 +331,7 @@ bool initStateTraj(String inData) {
   // return acknowledgement with result
   String msg = String("ST") + "A" + versionMatches + "B" + VERSION + "C" +
                modelMatches + "D" + MODEL;
-  Serial.println(msg);
+  SendToROS(msg);
 
   if (versionMatches && modelMatches) {
     return true;
@@ -767,6 +772,16 @@ void ProcessCalibrationString(String input, int * calJoints) {
     Serial8.println();
 }
 
+unsigned long lastLogTime = 0;  // Tracks the last log timestamp
+unsigned long intervalMs = 200;
+
+void logThrottled(const String& message) {
+  unsigned long currentTime = millis();
+  if (currentTime - lastLogTime >= intervalMs) {
+      Serial8.println(message);
+      lastLogTime = currentTime;
+  }
+}
 
 void stateTRAJ() {
   // clear message
@@ -805,6 +820,9 @@ void stateTRAJ() {
     // process message when new line character is received
     if (received == '\n') {
       String function = inData.substring(0, 2);
+
+      //logThrottled("Received: " + inData);
+
       if (function == "ST") {
         if (!initStateTraj(inData)) {
           STATE = STATE_ERR;
@@ -828,7 +846,7 @@ void stateTRAJ() {
 
         // update the host about estop state
         String msg = String("ES") + estop_pressed;
-        Serial.println(msg);
+        SendToROS(msg);
 
       } else if (function == "MV") {
         // clear speed counter
@@ -842,16 +860,16 @@ void stateTRAJ() {
 
         // update the host about estop state
         String msg = String("ES") + estop_pressed;
-        Serial.println(msg);
+        SendToROS(msg);
 
       } else if (function == "JP") {
         readMotorSteps(curMotorSteps);
         encStepsToJointPos(curMotorSteps, curJointPos);
         String msg = String("JP") + JointPosToString(curJointPos);
-        Serial.println(msg);
+        SendToROS(msg);
       } else if (function == "JV") {
         String msg = String("JV") + JointVelToString(lastVelocity);
-        Serial.println(msg);
+        SendToROS(msg);
       } else if (function == "JC") {
         String msg;
         int calJoints[] = {1, 1, 1, 1, 1, 1};
@@ -861,12 +879,12 @@ void stateTRAJ() {
             stepperJoints[i].setSpeed(0);
           }
         }
-        Serial.println(msg);
+        SendToROS(msg);
       } else if (function == "RE") {
         resetEstop();
         // update host with Estop status after trying to reset it
         String msg = String("ES") + estop_pressed;
-        Serial.println(msg);
+        SendToROS(msg);
       } else if (function == "LE") {//test Limit switches and encoders
         PrintOutEncodersAndLimitSwitch();
       } else if (function == "GR") {
@@ -895,35 +913,10 @@ void stateERR() {
   }
 
   while (STATE == STATE_ERR) {
-    Serial.println("ER: Unrecoverable error state entered. Please reset.");
+    SendToROS("ER: Unrecoverable error state entered. Please reset.");
     delay(1000);
   }
 }
-
-void functionA() {
-  Serial.println("Function A called");
-}
-
-void functionB() {
-  Serial.println("Function B called");
-}
-/*
-void loop() {
-  if (Serial.available() > 0) {
-    String input = Serial.readStringUntil('\n');
-    input.trim(); // Remove any whitespace or line breaks
-
-    if (input == "100") {
-      functionA();
-    } else if (input == "101") {
-      functionB();
-    } else {
-      Serial.println("Invalid input. Enter 100 or 101.");
-    }
-  }
-}*/
-
-
 
 void loop() {
   STATE = STATE_TRAJ;
