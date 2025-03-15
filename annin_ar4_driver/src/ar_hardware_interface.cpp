@@ -80,7 +80,7 @@ void ARHardwareInterface::init_variables() {
 
 hardware_interface::CallbackReturn ARHardwareInterface::on_activate(
     const rclcpp_lifecycle::State& /*previous_state*/) {
-  RCLCPP_INFO(logger_, "Activating hardware interface...");
+  RCLCPP_INFO(logger_, "Activating hardware- interface...");
   //register_homing_service();
   // Reset Estop (if any)
   bool success = driver_.resetEStop();
@@ -134,6 +134,7 @@ hardware_interface::CallbackReturn ARHardwareInterface::on_configure(
   {
     std::lock_guard<std::mutex> lock(string_mutex_);
     last_received_string_ = msg->data;
+    //RCLCPP_INFO(logger_, "last_received_string_: %s" , last_received_string_.c_str());
     // RCLCPP_INFO(node_->get_logger(), "Received string: %s", last_received_string_.c_str());
   }
 
@@ -146,6 +147,18 @@ hardware_interface::CallbackReturn ARHardwareInterface::on_configure(
       std::lock_guard<std::mutex> lock(string_mutex_);
       current_string = last_received_string_;
     }
+    RCLCPP_INFO(logger_, "handle_homing_request was called with: %s" , current_string.c_str());
+    if (driver_.calibrateSomeJoints(current_string))
+    {
+      response->success = true;
+      response->message = "Homing completed successfully";
+    }
+    else
+    {
+      response->success = false;
+      response->message = "Homing failed";
+    }
+
   // if (is_homing_) {
   //   response->success = false;
   //   response->message = "Homing already in progress";

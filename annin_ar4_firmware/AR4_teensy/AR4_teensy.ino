@@ -253,44 +253,44 @@ void setupSteppersMK3() {
 
 // initialize stepper motors and constants based on the model. Also verifies
 // that the software version matches the firmware version
-bool initStateTraj2(String inData) {
-  // parse initialisation message
-  int idxVersion = inData.indexOf('A');
-  int idxModel = inData.indexOf('B');
-  String softwareVersion = "2.0.0";//inData.substring(idxVersion + 1, idxModel);
-  int versionMatches = (softwareVersion == VERSION);
+// bool initStateTraj2(String inData) {
+//   // parse initialisation message
+//   int idxVersion = inData.indexOf('A');
+//   int idxModel = inData.indexOf('B');
+//   String softwareVersion = "2.0.0";//inData.substring(idxVersion + 1, idxModel);
+//   int versionMatches = (softwareVersion == VERSION);
 
-  String model = "mk3";//nData.substring(idxModel + 1, inData.length() - 1);
-  int modelMatches = false;
-  if (model == "mk1" || model == "mk2" || model == "mk3") {
-    modelMatches = true;
-    MODEL = model;
+//   String model = "mk3";//nData.substring(idxModel + 1, inData.length() - 1);
+//   int modelMatches = false;
+//   if (model == "mk1" || model == "mk2" || model == "mk3") {
+//     modelMatches = true;
+//     MODEL = model;
 
-    for (int i = 0; i < NUM_JOINTS; ++i) {
-      int joint_range = JOINT_LIMIT_MAX[MODEL][i] - JOINT_LIMIT_MIN[MODEL][i];
-      ENC_RANGE_STEPS[i] = static_cast<int>(MOTOR_STEPS_PER_DEG[MODEL][i] *
-                                            joint_range * ENC_MULT[i]);
-    }
+//     for (int i = 0; i < NUM_JOINTS; ++i) {
+//       int joint_range = JOINT_LIMIT_MAX[MODEL][i] - JOINT_LIMIT_MIN[MODEL][i];
+//       ENC_RANGE_STEPS[i] = static_cast<int>(MOTOR_STEPS_PER_DEG[MODEL][i] *
+//                                             joint_range * ENC_MULT[i]);
+//     }
 
-    if (model == "mk1") {
-      setupSteppersMK1();
-    } else if (model == "mk2") {
-      setupSteppersMK2();
-    } else if (model == "mk3") {
-      setupSteppersMK3();
-    }
-  }
+//     if (model == "mk1") {
+//       setupSteppersMK1();
+//     } else if (model == "mk2") {
+//       setupSteppersMK2();
+//     } else if (model == "mk3") {
+//       setupSteppersMK3();
+//     }
+//   }
 
-  // return acknowledgement with result
-  String msg = String("ST") + "A" + versionMatches + "B" + VERSION + "C" +
-               modelMatches + "D" + MODEL;
-  Serial.println(msg);
+//   // return acknowledgement with result
+//   String msg = String("ST") + "A" + versionMatches + "B" + VERSION + "C" +
+//                modelMatches + "D" + MODEL;
+//   Serial.println(msg);
 
-  if (versionMatches && modelMatches) {
-    return true;
-  }
-  return false;
-}
+//   if (versionMatches && modelMatches) {
+//     return true;
+//   }
+//   return false;
+// }
 
 //STA2.0.0Bmk3
 // initialize stepper motors and constants based on the model. Also verifies
@@ -493,6 +493,7 @@ bool moveToLimitSwitches(int* calJoints) {
 
   Serial8.println("Setting speed");
   for (int i = 0; i < NUM_JOINTS; i++) {
+    stepperJoints[i].setMaxSpeed(CAL_SPEED * CAL_SPEED_MULT[i] * CAL_DIR[i]);
     stepperJoints[i].setSpeed(CAL_SPEED * CAL_SPEED_MULT[i] * CAL_DIR[i]);
   }
   unsigned long startTime = millis();
@@ -547,6 +548,7 @@ bool moveAwayFromLimitSwitch(int* calJoints) {
   Serial8.println("Start moveAwayFromLimitSwitch");
   for (int i = 0; i < NUM_JOINTS; i++) {
     if (calJoints[i]) {
+      stepperJoints[i].setMaxSpeed(CAL_SPEED * CAL_SPEED_MULT[i] * CAL_DIR[i] *-1);
       stepperJoints[i].setSpeed(CAL_SPEED * CAL_SPEED_MULT[i] * CAL_DIR[i] *-1);
     }
   }

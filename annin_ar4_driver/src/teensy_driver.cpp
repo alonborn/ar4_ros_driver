@@ -126,6 +126,13 @@ bool TeensyDriver::calibrateJoints() {
   return sendCommand(outMsg);
 }
 
+bool TeensyDriver::calibrateSomeJoints(std::string joints) {
+  std::string outMsg = "JC";
+  outMsg += joints;
+  outMsg += "\n";
+  RCLCPP_INFO(logger_, "Calibration message to be sent: %s", outMsg.c_str());
+  return sendCommand(outMsg);
+}
 void TeensyDriver::getJointPositions(std::vector<double>& joint_positions) {
   // get current joint positions
   std::string msg = "JP\n";
