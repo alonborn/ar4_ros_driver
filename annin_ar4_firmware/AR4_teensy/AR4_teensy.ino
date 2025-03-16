@@ -456,6 +456,7 @@ void MoveTo(String inData, int* motorSteps,int * joints = NULL) {
 
   // update target joint position
   int cmdEncSteps[NUM_JOINTS] = {0};
+  logThrottled("*Moving to new pos"); 
   jointPosToEncSteps(cmdJointPos, cmdEncSteps,joints);
 
   MoveTo(cmdEncSteps, motorSteps,joints);
@@ -644,12 +645,6 @@ bool doCalibrationRoutine(String& outputMsg, int* calJoints) {
   }
   Serial8.println("moveToLimitSwitches complete");
 
-
-
-
-
-
-
   // record encoder steps
   int calSteps[6];
   for (int i = 0; i < NUM_JOINTS; ++i) {
@@ -773,11 +768,12 @@ void ProcessCalibrationString(String input, int * calJoints) {
 }
 
 unsigned long lastLogTime = 0;  // Tracks the last log timestamp
-unsigned long intervalMs = 200;
+unsigned long intervalMs = 100;
 
 void logThrottled(const String& message) {
+  return;
   unsigned long currentTime = millis();
-  if (currentTime - lastLogTime >= intervalMs) {
+  if (currentTime - lastLogTime >= intervalMs || message[0] == "*") {
       Serial8.println(message);
       lastLogTime = currentTime;
   }
