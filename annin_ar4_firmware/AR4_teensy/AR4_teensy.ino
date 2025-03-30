@@ -237,6 +237,20 @@ void setupSteppersMK2() {
   }
 }
 
+
+unsigned long lastLogTime = 0;  // Tracks the last log timestamp
+unsigned long intervalMs = 100;
+
+void logThrottled(const String& message) {
+  return;
+  unsigned long currentTime = millis();
+  if (currentTime - lastLogTime >= intervalMs || message[0] == "*") {
+      Serial8.println(message);
+      lastLogTime = currentTime;
+  }
+}
+
+
 void SendToROS(String data) {
   Serial.println(data);
   logThrottled(data);
@@ -432,6 +446,7 @@ void MoveTo(const int* cmdSteps, int* motorSteps,int * joints = NULL) {
     if (abs(diffEncSteps) > 2) {
       int diffMotSteps = diffEncSteps * ENC_DIR[i];
       stepperJoints[i].move(diffMotSteps);
+
     }
   }
 }
@@ -573,7 +588,7 @@ bool moveAwayFromLimitSwitch(int* calJoints) {
       }
     }
 
-    if (millis() - startTime > 10000) {
+    if (millis() - startTime > 20000) {
       return false;
     }
   }
@@ -597,6 +612,20 @@ bool moveLimitedAwayFromLimitSwitch(int* calJoints) {
   return moveAwayFromLimitSwitch(limitedJoints);
 }
 
+int counter = 0;
+void PrintDiff(int* curMotorSteps)
+{
+    counter ++;
+    if (counter == 50)
+    {
+      Serial8.println("==============");
+      for (int i = 0 ; i < NUM_JOINTS ; i++) {
+        Serial8.println (String(i) + (REST_MOTOR_STEPS[MODEL][i] - curMotorSteps[i]));
+      }
+      counter = 0;
+    }
+}
+
 bool ReturnToOriginalPosition(String &outputMsg,int* calJoints) {
 // return to original position
   Serial8.println("start ReturnToOriginalPosition");
@@ -604,17 +633,15 @@ bool ReturnToOriginalPosition(String &outputMsg,int* calJoints) {
   int curMotorSteps[NUM_JOINTS];
   readMotorSteps(curMotorSteps,calJoints);
   Serial8.println("ReturnToOriginalPosition");
-  for (int i = 0 ; i < NUM_JOINTS ; i++) {
-    Serial8.print(i);
-    Serial8.print(" ");
-    Serial8.print(REST_MOTOR_STEPS[MODEL][i]);
-    Serial8.print(" ");
-    Serial8.println(curMotorSteps[i]);
-  }
+
 
   while (!AtPosition(REST_MOTOR_STEPS[MODEL], curMotorSteps, 3,calJoints)) {
-    if (millis() - startTime > 10000) {
+    
+    //PrintDiff(curMotorSteps);
+
+    if (millis() - startTime > 20000) {
       outputMsg = "ER: Failed to return to original position.";
+      Serial8.println("ER: Failed to return to original position.");
       return false;
     }
     readMotorSteps(curMotorSteps,calJoints);
@@ -767,17 +794,7 @@ void ProcessCalibrationString(String input, int * calJoints) {
     Serial8.println();
 }
 
-unsigned long lastLogTime = 0;  // Tracks the last log timestamp
-unsigned long intervalMs = 100;
 
-void logThrottled(const String& message) {
-  return;
-  unsigned long currentTime = millis();
-  if (currentTime - lastLogTime >= intervalMs || message[0] == "*") {
-      Serial8.println(message);
-      lastLogTime = currentTime;
-  }
-}
 
 void stateTRAJ() {
   // clear message
