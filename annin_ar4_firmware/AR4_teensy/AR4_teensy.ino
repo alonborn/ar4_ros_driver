@@ -90,6 +90,15 @@ float JOINT_MAX_SPEED[] = {60.0, 60.0, 60.0, 60.0, 60.0, 60.0};  // deg/s
 float JOINT_MAX_ACCEL[] = {30.0, 30.0, 30.0, 30.0, 30.0, 30.0};  // deg/s^2
 char JOINT_NAMES[] = {'A', 'B', 'C', 'D', 'E', 'F'};
 
+
+bool isJointAtPosition[6];
+
+void ResetJointAtPosition() {
+  for (int i = 0; i < NUM_JOINTS; ++i) {
+    isJointAtPosition[i] = false;
+  }
+}
+
 bool estop_pressed = false;
 
 void estopPressed() { estop_pressed = true; }
@@ -206,7 +215,7 @@ void setup() {
   }
   delay (500);
   
-  Serial8.println("------------Debug started---------------");
+  Serial8.println("------------Debug started1---------------");
 }
 
 void setupSteppersMK1() {
@@ -364,6 +373,7 @@ void readMotorSteps(int* motorSteps,int * joints = NULL) {
       continue;
     motorSteps[i] = encPos[i].read() / ENC_MULT[i];
   }
+  //delayMicroseconds(50);
 }
 
 void encStepsToJointPos(int* encSteps, double* jointPos,int * joints = NULL) {
@@ -485,6 +495,12 @@ bool AtPosition(const int* targetMotorSteps, const int* currMotorSteps,const int
     int diffEncSteps = targetMotorSteps[i] - currMotorSteps[i];
     if (abs(diffEncSteps) > maxDiff) {
       allDone = false;
+    }
+    else {
+      if (!isJointAtPosition[i]) {
+        Serial8.println("Joint " + String(i) + " is at position");
+      } 
+      isJointAtPosition[i] = true;
     }
   }
   return allDone;
@@ -615,16 +631,19 @@ bool moveLimitedAwayFromLimitSwitch(int* calJoints) {
 int counter = 0;
 void PrintDiff(int* curMotorSteps)
 {
-    counter ++;
-    if (counter == 50)
+    Serial8.println("====Diff======");
+    //counter ++;
+    //if (counter == 50)
     {
       Serial8.println("==============");
       for (int i = 0 ; i < NUM_JOINTS ; i++) {
-        Serial8.println (String(i) + (REST_MOTOR_STEPS[MODEL][i] - curMotorSteps[i]));
+        Serial8.println (String(i) + ":" + (REST_MOTOR_STEPS[MODEL][i] - curMotorSteps[i]));
       }
       counter = 0;
     }
 }
+
+
 
 bool ReturnToOriginalPosition(String &outputMsg,int* calJoints) {
 // return to original position
@@ -635,13 +654,52 @@ bool ReturnToOriginalPosition(String &outputMsg,int* calJoints) {
   Serial8.println("ReturnToOriginalPosition");
 
 
-  while (!AtPosition(REST_MOTOR_STEPS[MODEL], curMotorSteps, 3,calJoints)) {
-    
-    //PrintDiff(curMotorSteps);
+  // while (!AtPosition(REST_MOTOR_STEPS[MODEL], curMotorSteps, 3,calJoints)) {
+  //   if (millis() - startTime > 30000) {
+  //     outputMsg = "ER: Failed to return to original position.";
+  //     Serial8.println("ER: Failed to return to original position.");
+  //     PrintDiff(curMotorSteps);
+  //     return false;
+  //   }
+  //   readMotorSteps(curMotorSteps,calJoints);
+  //   MoveTo(REST_MOTOR_STEPS[MODEL], curMotorSteps,calJoints);
+  //   for (int i = 0; i < NUM_JOINTS; ++i) {
+  //     if (calJoints[i] == 1)
+  //       safeRun(stepperJoints[i]);
+  //   }
+  // }
+  
+  bool isDone = true;
 
-    if (millis() - startTime > 20000) {
+  ResetJointAtPosition();
+
+  while (!AtPosition(REST_MOTOR_STEPS[MODEL], curMotorSteps, 3,calJoints)) {
+    if (millis() - startTime > 30000) {
       outputMsg = "ER: Failed to return to original position.";
       Serial8.println("ER: Failed to return to original position.");
+      PrintDiff(curMotorSteps);
+      isDone = false;
+      break;
+    }
+
+
+    readMotorSteps(curMotorSteps,calJoints);
+    MoveTo(REST_MOTOR_STEPS[MODEL], curMotorSteps,calJoints);
+    for (int i = 0; i < NUM_JOINTS; ++i) {
+      if (calJoints[i] == 1)
+        safeRun(stepperJoints[i]);
+    }
+  }
+  if (!isDone) {
+    Serial8.println("not done yet");
+    ResetJointAtPosition();
+  }
+
+  while (!AtPosition(REST_MOTOR_STEPS[MODEL], curMotorSteps, 3,calJoints)) {
+    if (millis() - startTime > 30000) {
+      outputMsg = "ER: Failed to return to original position.";
+      Serial8.println("ER: Failed to return to original position. 2nd time");
+      PrintDiff(curMotorSteps);
       return false;
     }
     readMotorSteps(curMotorSteps,calJoints);
@@ -651,6 +709,7 @@ bool ReturnToOriginalPosition(String &outputMsg,int* calJoints) {
         safeRun(stepperJoints[i]);
     }
   }
+
   Serial8.println("end of move");
   return true;
 }
@@ -699,24 +758,6 @@ bool doCalibrationRoutine(String& outputMsg, int* calJoints) {
   }
 
   Serial8.println("setMaxSpeed complete");
-
-  // return to original position
-  // unsigned long startTime = millis();
-  // int curMotorSteps[NUM_JOINTS];
-  // readMotorSteps(curMotorSteps,calJoints);
-  // while (!AtPosition(REST_MOTOR_STEPS[MODEL], curMotorSteps, 5,calJoints)) {
-  //   if (millis() - startTime > 10000) {
-  //     outputMsg = "ER: Failed to return to original position.";
-  //     return false;
-  //   }
-
-  //   readMotorSteps(curMotorSteps,calJoints);
-  //   MoveTo(REST_MOTOR_STEPS[MODEL], curMotorSteps,calJoints);
-  //   for (int i = 0; i < NUM_JOINTS; ++i) {
-  //     if (calJoints[i] == 1)
-  //       safeRun(stepperJoints[i]);
-  //   }
-  // }
 
   if (ReturnToOriginalPosition(outputMsg,calJoints) == false) {
     return false;
