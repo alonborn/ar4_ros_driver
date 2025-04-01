@@ -132,7 +132,11 @@ void PrintRestMotorStepOffsets()
 
 
 bool safeRun(AccelStepper& stepperJoint) {
-  if (estop_pressed) return false;
+  if (estop_pressed) {
+     return false;
+     Serial8.println("estop pressed");
+  }
+
   return stepperJoint.run();
 }
 
@@ -447,7 +451,7 @@ void MoveVelocity(String inData) {
   }
 }
 
-void MoveTo(const int* cmdSteps, int* motorSteps,int * joints = NULL) {
+void MoveTo(const int* cmdSteps, int* motorSteps,int * joints = NULL,bool verbose = false) {
   setAllMaxSpeeds();
   for (int i = 0; i < NUM_JOINTS; ++i) {
     if (joints != NULL && joints[i] == 0)
@@ -456,6 +460,24 @@ void MoveTo(const int* cmdSteps, int* motorSteps,int * joints = NULL) {
     if (abs(diffEncSteps) > 2) {
       int diffMotSteps = diffEncSteps * ENC_DIR[i];
       stepperJoints[i].move(diffMotSteps);
+      if (verbose){
+        // Serial8.print("Moving joint ");
+        // Serial8.print(i);
+        // Serial8.print(" to ");
+        // Serial8.print(cmdSteps[i]);
+        // Serial8.print(" from ");
+        // Serial8.println(motorSteps[i]);
+        // Serial8.print("Diff: ");
+        // Serial8.print("Diff: ");
+        // Serial8.println(diffMotSteps);
+        // //print the current position
+        // Serial8.print("Current position: ");
+        // Serial8.println(stepperJoints[i].currentPosition());
+        // Serial8.print("ENC_DIR["); 
+        // Serial8.print(i); 
+        // Serial8.print("]: ");
+        // Serial8.println(ENC_DIR[i]);
+      }
 
     }
   }
@@ -672,6 +694,12 @@ bool ReturnToOriginalPosition(String &outputMsg,int* calJoints) {
   bool isDone = true;
 
   ResetJointAtPosition();
+  
+  // set all joints to 0 position - this is due to a bug in the Aceel Stepper, when you try to move the stepper in X steps and it's position is -X - it won't move
+  for (int i = 0 ; i < NUM_JOINTS; ++i) {
+    if (calJoints[i] == 1)
+      stepperJoints[i].setCurrentPosition(0);
+  }
 
   while (!AtPosition(REST_MOTOR_STEPS[MODEL], curMotorSteps, 3,calJoints)) {
     if (millis() - startTime > 30000) {
@@ -695,6 +723,14 @@ bool ReturnToOriginalPosition(String &outputMsg,int* calJoints) {
     ResetJointAtPosition();
   }
 
+  startTime = millis();
+
+
+  for (int i = 0 ; i < NUM_JOINTS; ++i) {
+    if (calJoints[i] == 1)
+      stepperJoints[i].setCurrentPosition(0);
+  }
+  
   while (!AtPosition(REST_MOTOR_STEPS[MODEL], curMotorSteps, 3,calJoints)) {
     if (millis() - startTime > 30000) {
       outputMsg = "ER: Failed to return to original position.";
@@ -702,8 +738,9 @@ bool ReturnToOriginalPosition(String &outputMsg,int* calJoints) {
       PrintDiff(curMotorSteps);
       return false;
     }
+    //PrintDiff(curMotorSteps);
     readMotorSteps(curMotorSteps,calJoints);
-    MoveTo(REST_MOTOR_STEPS[MODEL], curMotorSteps,calJoints);
+    MoveTo(REST_MOTOR_STEPS[MODEL], curMotorSteps,calJoints,true);
     for (int i = 0; i < NUM_JOINTS; ++i) {
       if (calJoints[i] == 1)
         safeRun(stepperJoints[i]);
