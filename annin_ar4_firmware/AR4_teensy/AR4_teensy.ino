@@ -752,10 +752,27 @@ bool ReturnToOriginalPosition(String &outputMsg,int* calJoints) {
 }
 
 bool doCalibrationRoutine(String& outputMsg, int* calJoints) {
-  // calibrate all joints
+  // calibrate all joints 
   //int calJoints[] = {1, 1, 1, 1, 1, 1};
   //int calJoints[] = {1, 0,0,0,0,0};
   Serial8.println("Start Calibration");
+
+   bool dummyCal = true;
+   dummyCal = false;
+   if (dummyCal) {
+     Serial8.println("dummy calibration!");
+     delay(2000);
+     outputMsg = "JCA71759B-23231C17831D-93679E-9221F41952";
+     encPos[0].write(75561);
+     encPos[1].write(23553);
+     encPos[2].write(47780);
+     encPos[3].write(89175);
+     encPos[4].write(11474); 
+     encPos[5].write(39997);
+     return true;
+   }
+
+
   if (!moveLimitedAwayFromLimitSwitch(calJoints)) {
     outputMsg = "ER: Failed to move away from limit switches at the start.";
     return false;
@@ -806,6 +823,8 @@ bool doCalibrationRoutine(String& outputMsg, int* calJoints) {
   outputMsg = String("JC") + "A" + calSteps[0] + "B" + calSteps[1] + "C" +
               calSteps[2] + "D" + calSteps[3] + "E" + calSteps[4] + "F" +
               calSteps[5];
+  Serial8.println(outputMsg);
+  PrintOutEncodersAndLimitSwitch();
   return true;
 
 
