@@ -64,7 +64,10 @@ int CalOffset[] = {0,0,0,0,0,0};
 int REST_MOTOR_STEPS_MK1[] = {7555, 2333, 4944, 7049, 2295, 3431};
 int REST_MOTOR_STEPS_MK2[] = {7555, 2333, 4944, 7049, 2295, 3431};
 //int REST_MOTOR_STEPS_MK3[] = {7555, 2333, 4944, 8960, 2295, 4000};
-int REST_MOTOR_STEPS_MK3[] = {7555, 2353, 4779, 8920, 2295, 4000};
+int REST_MOTOR_STEPS_MK3[] = {7555, 2348, 4755, 8985, 2230, 4150};
+
+
+7555, 2348, 4755, 8985, 2230, 4150
 
 enum SM { STATE_TRAJ, STATE_ERR };
 SM STATE = STATE_TRAJ;
@@ -665,8 +668,6 @@ void PrintDiff(int* curMotorSteps)
     }
 }
 
-
-
 bool ReturnToOriginalPosition(String &outputMsg,int* calJoints) {
 // return to original position
   Serial8.println("start ReturnToOriginalPosition");
@@ -674,24 +675,6 @@ bool ReturnToOriginalPosition(String &outputMsg,int* calJoints) {
   int curMotorSteps[NUM_JOINTS];
   readMotorSteps(curMotorSteps,calJoints);
   Serial8.println("ReturnToOriginalPosition");
-
-
-  // while (!AtPosition(REST_MOTOR_STEPS[MODEL], curMotorSteps, 3,calJoints)) {
-  //   if (millis() - startTime > 30000) {
-  //     outputMsg = "ER: Failed to return to original position.";
-  //     Serial8.println("ER: Failed to return to original position.");
-  //     PrintDiff(curMotorSteps);
-  //     return false;
-  //   }
-  //   readMotorSteps(curMotorSteps,calJoints);
-  //   MoveTo(REST_MOTOR_STEPS[MODEL], curMotorSteps,calJoints);
-  //   for (int i = 0; i < NUM_JOINTS; ++i) {
-  //     if (calJoints[i] == 1)
-  //       safeRun(stepperJoints[i]);
-  //   }
-  // }
-  
-  bool isDone = true;
 
   ResetJointAtPosition();
   
@@ -706,10 +689,8 @@ bool ReturnToOriginalPosition(String &outputMsg,int* calJoints) {
       outputMsg = "ER: Failed to return to original position.";
       Serial8.println("ER: Failed to return to original position.");
       PrintDiff(curMotorSteps);
-      isDone = false;
       break;
     }
-
 
     readMotorSteps(curMotorSteps,calJoints);
     MoveTo(REST_MOTOR_STEPS[MODEL], curMotorSteps,calJoints);
@@ -718,34 +699,8 @@ bool ReturnToOriginalPosition(String &outputMsg,int* calJoints) {
         safeRun(stepperJoints[i]);
     }
   }
-  if (!isDone) {
-    Serial8.println("not done yet");
-    ResetJointAtPosition();
-  }
 
   startTime = millis();
-
-
-  for (int i = 0 ; i < NUM_JOINTS; ++i) {
-    if (calJoints[i] == 1)
-      stepperJoints[i].setCurrentPosition(0);
-  }
-  
-  while (!AtPosition(REST_MOTOR_STEPS[MODEL], curMotorSteps, 3,calJoints)) {
-    if (millis() - startTime > 30000) {
-      outputMsg = "ER: Failed to return to original position.";
-      Serial8.println("ER: Failed to return to original position. 2nd time");
-      PrintDiff(curMotorSteps);
-      return false;
-    }
-    //PrintDiff(curMotorSteps);
-    readMotorSteps(curMotorSteps,calJoints);
-    MoveTo(REST_MOTOR_STEPS[MODEL], curMotorSteps,calJoints,true);
-    for (int i = 0; i < NUM_JOINTS; ++i) {
-      if (calJoints[i] == 1)
-        safeRun(stepperJoints[i]);
-    }
-  }
 
   Serial8.println("end of move");
   return true;
@@ -811,8 +766,6 @@ bool doCalibrationRoutine(String& outputMsg, int* calJoints) {
                                  MOTOR_STEPS_PER_DEG[MODEL][i]);
   }
 
-  Serial8.println("setMaxSpeed complete");
-
   if (ReturnToOriginalPosition(outputMsg,calJoints) == false) {
     return false;
   }
@@ -868,6 +821,42 @@ void updateMotorVelocities(int* motorSteps, int* lastMotorSteps,
       }
     }
   }
+}
+
+void parseRestPosString(const String input) {
+  int count = 0;
+  const int maxCount = NUM_JOINTS;
+
+  int* outputArray = REST_MOTOR_STEPS["mk3"];  // Assuming REST_MOTOR_STEPS is a map-like structure with int* values
+  if (outputArray == nullptr) {
+    Serial8.println("Error: REST_MOTOR_STEPS[\"mk3\"] is null");
+    return;
+  }
+
+  int startIdx = input.indexOf(' ') + 1;  // Skip the "RP "
+
+  while (startIdx > 0 && count < maxCount) {
+    int endIdx = input.indexOf(' ', startIdx);
+    String numStr;
+
+    if (endIdx == -1) {
+      numStr = input.substring(startIdx);
+    } else {
+      numStr = input.substring(startIdx, endIdx);
+    }
+
+    outputArray[count++] = numStr.toInt();
+
+    if (endIdx == -1) break;
+    startIdx = endIdx + 1;
+  }
+
+  Serial8.print("Parsed values: ");
+  for (int i = 0; i < count; ++i) {
+    Serial8.print(outputArray[i]);
+    Serial8.print(" ");
+  }
+  Serial8.println(); 
 }
 
 void ProcessCalibrationString(String input, int * calJoints) {
@@ -972,6 +961,10 @@ void stateTRAJ() {
         String msg = String("ES") + estop_pressed;
         SendToROS(msg);
 
+      } else if (function == "RP") {
+        // read rest motor step offsets
+        parseRestPosString(inData);
+      
       } else if (function == "JP") {
         readMotorSteps(curMotorSteps);
         encStepsToJointPos(curMotorSteps, curJointPos);
