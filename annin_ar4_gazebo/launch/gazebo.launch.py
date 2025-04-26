@@ -90,7 +90,7 @@ def generate_launch_description():
         executable="spawner",
         arguments=[
             "joint_state_broadcaster", "-c", "/controller_manager",
-            "--controller-manager-timeout", "60"
+            "--controller-manager-timeout", "80"
         ],
     )
 
@@ -100,7 +100,7 @@ def generate_launch_description():
         executable="spawner",
         arguments=[
             "joint_trajectory_controller", "-c", "/controller_manager",
-            "--controller-manager-timeout", "60"
+            "--controller-manager-timeout", "80"
         ],
     )
 
@@ -109,7 +109,7 @@ def generate_launch_description():
         executable="spawner",
         arguments=[
             "gripper_controller", "-c", "/controller_manager",
-            "--controller-manager-timeout", "60"
+            "--controller-manager-timeout", "80"
         ],
     )
 
