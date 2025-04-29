@@ -124,10 +124,10 @@ void resetEstop() {
 void PrintRestMotorStepOffsets()
 {
   for (int i = 0 ; i < NUM_JOINTS ; i++)  {
-    Serial.print (REST_MOTOR_STEPS[MODEL][i]);
-    Serial.print (" ");
+    Serial8.print (REST_MOTOR_STEPS[MODEL][i]);
+    Serial8.print (" ");
   }
-  Serial.println("");
+  Serial8.println("");
 }
 
 
@@ -577,7 +577,7 @@ bool moveToLimitSwitches(int* calJoints) {
       }
     }
 
-    if (millis() - startTime > 40000) {
+    if (millis() - startTime > 50000) {
       return false;
     }
   }
@@ -695,7 +695,7 @@ bool ReturnToOriginalPosition(String &outputMsg,int* calJoints) {
     if (calJoints[i] == 1)
       stepperJoints[i].setCurrentPosition(0);
   }
-  PrintRestMotorStepOffsets();
+  //PrintRestMotorStepOffsets();
 
   bool testWasDone = false;
 
