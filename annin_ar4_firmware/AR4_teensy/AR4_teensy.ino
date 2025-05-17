@@ -718,18 +718,18 @@ bool ReturnToOriginalPosition(String &outputMsg,int* calJoints) {
     readMotorSteps(curMotorSteps,calJoints);
     //delayMicroseconds(2);
 
-    if ((millis() - startTime > 1000) && !testWasDone){  //wait 1 sec before checking if encoder is connected
-      testWasDone = true;
-      int badEncoder = -1;
-      badEncoder = check_encoder_connected (curMotorSteps,initialMotorSteps,calJoints);
-      if (badEncoder > -1) {
-        outputMsg = String("ER: Encoder not connected:") + badEncoder;
-        Serial8.println(outputMsg);
-        Serial8.println("Calibration Halted.");
-        return false;
-      }
+    // if ((millis() - startTime > 1000) && !testWasDone){  //wait 1 sec before checking if encoder is connected
+    //   testWasDone = true;
+    //   int badEncoder = -1;
+    //   badEncoder = check_encoder_connected (curMotorSteps,initialMotorSteps,calJoints);
+    //   if (badEncoder > -1) {
+    //     outputMsg = String("ER: Encoder not connected:") + badEncoder;
+    //     Serial8.println(outputMsg);
+    //     Serial8.println("Calibration Halted.");
+    //     return false;
+    //   }
 
-    }
+    // }
     
     MoveTo(REST_MOTOR_STEPS[MODEL], curMotorSteps,calJoints);
     for (int i = 0; i < NUM_JOINTS; ++i) {
