@@ -681,12 +681,24 @@ int check_encoder_connected (int* curMotorSteps,int* initialMotorSteps, int* joi
 }
 
 bool ReturnToOriginalPosition(String &outputMsg,int* calJoints) {
+
+
+
+
 // return to original position
   Serial8.println("start ReturnToOriginalPosition");
   unsigned long startTime = millis();
   int curMotorSteps[NUM_JOINTS];
   readMotorSteps(curMotorSteps,calJoints);
   Serial8.println("ReturnToOriginalPosition");
+
+  Serial8.print("Joint 5 - Current motorSteps[5]: ");
+  Serial8.println(curMotorSteps[5]);
+  Serial8.print("Joint 5 - Target REST_MOTOR_STEPS[5]: ");
+  Serial8.println(REST_MOTOR_STEPS[MODEL][5]);
+  Serial8.print("Joint 5 - ENC_DIR[5]: ");
+  Serial8.println(ENC_DIR[5]);
+
 
   ResetJointAtPosition();
   
