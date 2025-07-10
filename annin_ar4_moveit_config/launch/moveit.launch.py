@@ -188,7 +188,8 @@ def generate_launch_description():
             planning_scene_monitor_parameters,
             move_group_capabilities,
             {
-                "use_sim_time": use_sim_time
+                "use_sim_time": use_sim_time,
+                "debug": True  # 👈 Add this line
             },
         ],
     )
