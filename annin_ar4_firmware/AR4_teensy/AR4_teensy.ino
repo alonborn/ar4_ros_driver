@@ -3,6 +3,7 @@
 #include <Encoder.h>
 #include <avr/pgmspace.h>
 #include <math.h>
+#include <EEPROM.h>  
 
 #include <map>
 
@@ -64,7 +65,7 @@ int CalOffset[] = {0,0,0,0,0,0};
 int REST_MOTOR_STEPS_MK1[] = {7555, 2333, 4944, 7049, 2295, 3431};
 int REST_MOTOR_STEPS_MK2[] = {7555, 2333, 4944, 7049, 2295, 3431};
 //int REST_MOTOR_STEPS_MK3[] = {7555, 2333, 4944, 8960, 2295, 4000};
-int REST_MOTOR_STEPS_MK3[] = {7555, 2310, 4760, 8985, 2233, 4150};
+int REST_MOTOR_STEPS_MK3[] = {7555, 2310, 5290, 8985, 2213, 4230};
 
 enum SM { STATE_TRAJ, STATE_ERR };
 SM STATE = STATE_TRAJ;
@@ -92,6 +93,21 @@ char JOINT_NAMES[] = {'A', 'B', 'C', 'D', 'E', 'F'};
 
 
 bool isJointAtPosition[6];
+
+void LoadRestStepsFromEEPROM() {
+  for (int i = 0; i < NUM_JOINTS; ++i) {
+    int val = 0;
+    EEPROM.get(i * sizeof(int), val);
+    REST_MOTOR_STEPS["mk3"][i] = val;
+    Serial8.print("Joint ");
+    Serial8.print(i);
+    Serial8.print(": ");
+    Serial8.println(val); 
+    // Serial.println("Joint " + String(i) + ": " + String(val));  // for debugging
+  }
+  Serial8.println("EEPROM home positions loaded");
+}
+
 
 void ResetJointAtPosition() {
   for (int i = 0; i < NUM_JOINTS; ++i) {
@@ -145,6 +161,116 @@ bool safeRunSpeed(AccelStepper& stepperJoint) {
   return stepperJoint.runSpeed();
 }
 
+void ManualHomeOffset(String inData) {
+  int steps[NUM_JOINTS] = {0};
+
+  // Parse the 6 values after "HM"
+  int idx = 0;
+  char* token = strtok(inData.c_str() + 2, " ");
+  while (token != NULL && idx < NUM_JOINTS) {
+    steps[idx++] = atoi(token);
+    token = strtok(NULL, " ");
+  }
+
+  // Move specified joints and zero their stepper position
+  for (int i = 0; i < NUM_JOINTS; ++i) {
+    if (steps[i] != 0) {
+      stepperJoints[i].setCurrentPosition(0);  // avoid skipping
+      stepperJoints[i].move(steps[i]);
+      Serial8.print("Moving joint ");
+      Serial8.print(i);
+      Serial8.print(" by ");
+      Serial8.print(steps[i]);
+      Serial8.println(" steps.");
+    }
+  }
+
+  // Run all motions until completion
+  bool allDone = false;
+  while (!allDone) {
+    allDone = true;
+    for (int i = 0; i < NUM_JOINTS; ++i) {
+      if (steps[i] != 0 && !safeRun(stepperJoints[i])) {
+        allDone = false;
+      }
+    }
+  }
+
+  delay(200);  // let motors settle
+
+  // Set encoder positions to match calibration logic
+  for (int i = 0; i < NUM_JOINTS; ++i) {
+    if (ENC_MAX_AT_ANGLE_MIN[i] == 1)
+      encPos[i].write(ENC_RANGE_STEPS[i]);
+    else
+      encPos[i].write(0);
+  }
+
+  // Update and save new rest steps
+  for (int i = 0; i < NUM_JOINTS; ++i) {
+    REST_MOTOR_STEPS[MODEL][i] += steps[i];  // Apply delta to existing rest value
+    EEPROM.put(i * sizeof(int), REST_MOTOR_STEPS[MODEL][i]);
+
+    Serial8.print("Joint ");
+    Serial8.print(i);
+    Serial8.print(": Added ");
+    Serial8.print(steps[i]);
+    Serial8.print(" → New rest = ");
+    Serial8.println(REST_MOTOR_STEPS[MODEL][i]);
+  }
+  
+  Serial8.println("HM: Manual move complete. New position set as home.");
+  Serial8.println("EEPROM updated.");
+}
+
+
+
+void PrintEEPROMRestSteps() {
+  Serial8.println("📤 EEPROM-stored REST_MOTOR_STEPS:");
+
+  for (int i = 0; i < NUM_JOINTS; ++i) {
+    int value;
+    EEPROM.get(i * sizeof(int), value);
+    Serial8.print("Joint ");
+    Serial8.print(i);
+    Serial8.print(": ");
+    Serial8.println(value);
+  }
+
+  Serial8.println("✅ Done reading EEPROM.");
+}
+
+
+void SaveRestStepsToEEPROM() {
+  Serial.println("Saving REST_MOTOR_STEPS to EEPROM...");
+  
+  for (int i = 0; i < NUM_JOINTS; ++i) {
+    int value = REST_MOTOR_STEPS[MODEL][i];
+    EEPROM.put(i * sizeof(int), value);
+  }
+
+  Serial8.println("Saved values:");
+  for (int i = 0; i < NUM_JOINTS; ++i) {
+    int saved;
+    EEPROM.get(i * sizeof(int), saved);
+    Serial8.print("Joint ");
+    Serial8.print(i);
+    Serial8.print(": ");
+    Serial8.println(saved);
+  }
+
+  Serial8.println("✅ EEPROM save complete.");
+}
+
+
+void ClearRestStepsEEPROM() {
+  for (int i = 0; i < NUM_JOINTS; ++i) {
+    int zero = 0;
+    EEPROM.put(i * sizeof(int), zero);
+  }
+  Serial8.println("EEPROM cleared.");
+}
+
 void ApplyRestMotorStepOffset(String data) {
     if (!data.startsWith("SR ")) {
         Serial.println("Error: Invalid command format:" + data);
@@ -175,6 +301,14 @@ void ApplyRestMotorStepOffset(String data) {
 }
 
 void setup() {
+  Serial.begin(9600);
+  Serial8.begin(9600);
+
+  while (!Serial8) {
+    ; // Wait for Serial port to connect
+  }
+  
+  Serial8.println("------------Setup Started---------------");
   MOTOR_STEPS_PER_DEG["mk1"] = MOTOR_STEPS_PER_DEG_MK1;
   MOTOR_STEPS_PER_DEG["mk2"] = MOTOR_STEPS_PER_DEG_MK2;
   MOTOR_STEPS_PER_DEG["mk3"] = MOTOR_STEPS_PER_DEG_MK3;
@@ -197,7 +331,7 @@ void setup() {
     pinMode(LIMIT_PINS[i], INPUT);
   }
 
-
+  LoadRestStepsFromEEPROM();
 
   for (int i = 0; i < NUM_JOINTS; ++i) {
     limitSwitches[i] = Bounce2::Button();
@@ -209,17 +343,13 @@ void setup() {
   pinMode(ESTOP_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(ESTOP_PIN), estopPressed, FALLING);
 
-  Serial.begin(9600);
 
-  Serial8.begin(9600);
   delay (500);
 
-  while (!Serial8) {
-    ; // Wait for Serial port to connect
-  }
-  delay (500);
+
   
-  Serial8.println("------------Debug started1---------------");
+  Serial8.println("------------Setup Ended---------------");
+  Serial8.flush();
 }
 
 void setupSteppersMK1() {
@@ -404,6 +534,49 @@ String JointPosToString(double* jointPos) {
   }
   return out;
 }
+
+void SaveRestStepsFromCommand(String inData) {
+  Serial8.println("ED: Received command to store rest steps.");
+  Serial8.print("ED: Raw input: ");
+  Serial8.println(inData);
+
+  int steps[NUM_JOINTS] = {0};
+  int idx = 0;
+  char* token = strtok(inData.c_str() + 2, ",");
+
+  while (token != NULL && idx < NUM_JOINTS) {
+    steps[idx] = atoi(token);
+    Serial8.print("ED: Parsed joint ");
+    Serial8.print(idx);
+    Serial8.print(" → ");
+    Serial8.println(steps[idx]);
+    idx++;
+    token = strtok(NULL, ",");
+  }
+
+  if (idx != NUM_JOINTS) {
+    Serial8.print("ED: Error - expected ");
+    Serial8.print(NUM_JOINTS);
+    Serial8.print(" values but got ");
+    Serial8.println(idx);
+    Serial8.println("ED: Aborting write to EEPROM.");
+    return;
+  }
+
+  Serial8.println("ED: Writing to EEPROM...");
+  for (int i = 0; i < NUM_JOINTS; ++i) {
+    REST_MOTOR_STEPS[MODEL][i] = steps[i];
+    EEPROM.put(i * sizeof(int), steps[i]);
+    Serial8.print("ED: EEPROM[");
+    Serial8.print(i);
+    Serial8.print("] ← ");
+    Serial8.println(steps[i]);
+  }
+
+  Serial8.println("ED: Successfully saved REST_MOTOR_STEPS to EEPROM.");
+}
+
+
 
 String JointVelToString(double* lastVelocity) {
   String out;
@@ -681,11 +854,7 @@ int check_encoder_connected (int* curMotorSteps,int* initialMotorSteps, int* joi
 }
 
 bool ReturnToOriginalPosition(String &outputMsg,int* calJoints) {
-
-
-
-
-// return to original position
+  // return to original position
   Serial8.println("start ReturnToOriginalPosition");
   unsigned long startTime = millis();
   int curMotorSteps[NUM_JOINTS];
@@ -761,21 +930,6 @@ bool doCalibrationRoutine(String& outputMsg, int* calJoints) {
   //int calJoints[] = {1, 1, 1, 1, 1, 1};
   //int calJoints[] = {1, 0,0,0,0,0};
   Serial8.println("Start Calibration");
-
-   bool dummyCal = true;
-   dummyCal = false;
-   if (dummyCal) {
-     Serial8.println("dummy calibration!");
-     delay(2000);
-     outputMsg = "JCA71759B-23231C17831D-93679E-9221F41952";
-     encPos[0].write(75561);
-     encPos[1].write(23553);
-     encPos[2].write(47780);
-     encPos[3].write(89175);
-     encPos[4].write(11474); 
-     encPos[5].write(39997);
-     return true;
-   }
 
 
   if (!moveLimitedAwayFromLimitSwitch(calJoints)) {
@@ -1048,6 +1202,22 @@ void stateTRAJ() {
         ApplyRestMotorStepOffset(inData);
         int calJoints[] = {1,1,1,1,1, 1};
         ReturnToOriginalPosition(msg,calJoints);
+      }
+      else if (function == "HM") {
+        ManualHomeOffset(inData);
+      }
+      else if (function == "CE") {
+        ClearRestStepsEEPROM();
+      }
+      else if (function == "SE") {
+        SaveRestStepsToEEPROM();
+      }
+      else if (function == "ER") {
+        PrintEEPROMRestSteps();
+      }
+      else if (inData.startsWith("ED")) {
+        Serial8.println("Dispatch: Handling ED command.");
+        SaveRestStepsFromCommand(inData);
       }
 
       inData = "";  // clear message

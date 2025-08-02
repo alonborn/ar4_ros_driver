@@ -1,5 +1,6 @@
 import os
 import tempfile
+from launch.conditions import IfCondition
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -50,7 +51,16 @@ def generate_launch_description():
     tf_prefix_arg = DeclareLaunchArgument("tf_prefix",
                                           default_value="",
                                           description="Prefix for AR4 tf_tree")
+    
+
     tf_prefix = LaunchConfiguration("tf_prefix")
+
+    use_realsense_arg = DeclareLaunchArgument(
+        "use_realsense",
+        default_value="true",
+        description="Whether to launch the RealSense camera"
+    )
+    use_realsense = LaunchConfiguration("use_realsense")
 
     initial_joint_controllers = ControllerConfigSubstitution(
         PathJoinSubstitution([
@@ -141,6 +151,48 @@ def generate_launch_description():
         output="screen",
     )
 
+    realsense = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            [
+                os.path.join(
+                    get_package_share_directory("realsense2_camera"),
+                    "launch",
+                    "rs_launch.py",
+                )
+            ]
+        ),
+        launch_arguments={
+            'enable_rgbd': 'true',
+            'enable_sync': 'true',
+            'align_depth.enable': 'true',
+            'enable_color': 'true',
+            'enable_depth': 'true',
+            'initial_reset': 'true',
+        }.items(),
+        condition=IfCondition(use_realsense)
+    )
+
+
+    realsense = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            [
+                os.path.join(
+                    get_package_share_directory("realsense2_camera"),
+                    "launch",
+                    "rs_launch.py",
+                )
+            ]
+        ),
+        launch_arguments={
+            'enable_rgbd': 'true',
+            'enable_sync': 'true',
+            'align_depth.enable': 'true',
+            'enable_color': 'true',
+            'enable_depth': 'true',
+            'initial_reset': 'true',
+        }.items(),
+    )
+
     return LaunchDescription([
         ar_model_arg,
         tf_prefix_arg,
@@ -151,4 +203,5 @@ def generate_launch_description():
         joint_state_broadcaster_spawner,
         initial_joint_controller_spawner_started,
         gripper_joint_controller_spawner_started,
+        realsense,
     ])
