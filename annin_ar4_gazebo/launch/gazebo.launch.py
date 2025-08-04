@@ -172,27 +172,6 @@ def generate_launch_description():
         condition=IfCondition(use_realsense)
     )
 
-
-    realsense = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            [
-                os.path.join(
-                    get_package_share_directory("realsense2_camera"),
-                    "launch",
-                    "rs_launch.py",
-                )
-            ]
-        ),
-        launch_arguments={
-            'enable_rgbd': 'true',
-            'enable_sync': 'true',
-            'align_depth.enable': 'true',
-            'enable_color': 'true',
-            'enable_depth': 'true',
-            'initial_reset': 'true',
-        }.items(),
-    )
-
     return LaunchDescription([
         ar_model_arg,
         tf_prefix_arg,
