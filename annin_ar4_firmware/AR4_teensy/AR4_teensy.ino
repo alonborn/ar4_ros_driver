@@ -156,6 +156,28 @@ bool safeRun(AccelStepper& stepperJoint) {
   return stepperJoint.run();
 }
 
+
+bool safeRunForNudge(AccelStepper& s) {
+  if (estop_pressed) {
+    Serial8.println("ER: E-Stop pressed");
+    // Treat as "done" so outer loop can exit; handle the error outside.
+    return true;
+  }
+
+  if (s.distanceToGo() != 0) {
+    Serial8.print("Running joint, distance to go: ");
+    Serial8.print(s.distanceToGo());
+    Serial8.print("  target: ");
+    Serial8.println(s.targetPosition());  // target in steps
+
+    s.run();              // advance toward target
+    return false;         // not done yet
+  }
+  return true;            // target reached
+}
+
+
+
 bool safeRunSpeed(AccelStepper& stepperJoint) {
   if (estop_pressed) return false;
   return stepperJoint.runSpeed();
@@ -163,6 +185,25 @@ bool safeRunSpeed(AccelStepper& stepperJoint) {
 
 void ManualHomeOffset(String inData) {
   int steps[NUM_JOINTS] = {0};
+
+  // --- 1) Remember current speeds (current speed & maxSpeed) ---
+  float prevSpeed[NUM_JOINTS];
+  float prevMaxSpeed[NUM_JOINTS];
+  for (int i = 0; i < NUM_JOINTS; ++i) {
+    prevSpeed[i]     = stepperJoints[i].speed();     // current effective speed (steps/s)
+    prevMaxSpeed[i]  = stepperJoints[i].maxSpeed();  // max allowed speed (steps/s)
+  }
+
+  // --- 2) Set speed to max (raise maxSpeed to your configured maximum) ---
+  for (int i = 0; i < NUM_JOINTS; ++i) {
+    // Convert deg/s limit to steps/s
+    float maxStepsPerSec = JOINT_MAX_SPEED[i] * MOTOR_STEPS_PER_DEG[MODEL][i];
+    if (maxStepsPerSec < 100.0f) maxStepsPerSec = 100.0f; // floor to avoid too-low limits
+    stepperJoints[i].setMaxSpeed(maxStepsPerSec);
+    // (Optional) nudge current speed toward max in the intended direction; run() ignores setSpeed,
+    // but this won’t hurt and can help if you switch to runSpeedToPosition().
+    stepperJoints[i].setSpeed( (steps[i] >= 0 ? +1.0f : -1.0f) * maxStepsPerSec );
+  }
 
   // Parse the 6 values after "HM"
   int idx = 0;
@@ -189,11 +230,20 @@ void ManualHomeOffset(String inData) {
   bool allDone = false;
   while (!allDone) {
     allDone = true;
+    // Serial8.println("Running stepper joints...");
     for (int i = 0; i < NUM_JOINTS; ++i) {
-      if (steps[i] != 0 && !safeRun(stepperJoints[i])) {
+      if (steps[i] != 0 && !safeRunForNudge(stepperJoints[i])) {
         allDone = false;
       }
     }
+  }
+
+  Serial8.println("Movement Done");
+
+  // --- 3) Revert speeds to the memorized values ---
+  for (int i = 0; i < NUM_JOINTS; ++i) {
+    stepperJoints[i].setMaxSpeed(prevMaxSpeed[i]);
+    stepperJoints[i].setSpeed(prevSpeed[i]);
   }
 
   delay(200);  // let motors settle
@@ -206,6 +256,7 @@ void ManualHomeOffset(String inData) {
       encPos[i].write(0);
   }
 
+  Serial8.println("encoders are set to match home positions");
   // Update and save new rest steps
   for (int i = 0; i < NUM_JOINTS; ++i) {
     REST_MOTOR_STEPS[MODEL][i] += steps[i];  // Apply delta to existing rest value
@@ -219,9 +270,12 @@ void ManualHomeOffset(String inData) {
     Serial8.println(REST_MOTOR_STEPS[MODEL][i]);
   }
   
-  Serial8.println("HM: Manual move complete. New position set as home.");
+  // Serial8.println("HM: Manual move complete. New position set as home.");
   Serial8.println("EEPROM updated.");
+
+  // Serial.println("OK");
 }
+
 
 
 

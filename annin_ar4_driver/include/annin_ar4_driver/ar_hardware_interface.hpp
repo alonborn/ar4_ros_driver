@@ -9,6 +9,10 @@
 #include "annin_ar4_driver/teensy_driver.hpp"
 #include "std_srvs/srv/trigger.hpp"
 #include "std_msgs/msg/string.hpp"
+#include "my_robot_interfaces/srv/nudge_joint.hpp"     // NEW
+#include <rclcpp/qos.hpp>                            // for rclcpp::ServicesQoS
+
+
 
 using namespace hardware_interface;
 
@@ -33,17 +37,19 @@ class ARHardwareInterface : public hardware_interface::SystemInterface {
       const rclcpp::Time& time, const rclcpp::Duration& period) override;
   hardware_interface::CallbackReturn on_configure(
         const rclcpp_lifecycle::State & previous_state) override;
+
         
-  // New method for homing
-
-
+  // Homing service handler
   void handle_homing_request(
     const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
     std::shared_ptr<std_srvs::srv::Trigger::Response> response);
   bool perform_homing();
 
- private:
+  // NEW: direct API to nudge one joint by a number of motor steps (can be negative)
+  // joint_idx in [0..N-1], steps e.g. +5 / -5
+  bool nudgeJointSteps(int joint_idx, int steps);
 
+ private:
   std::shared_ptr<rclcpp::Node> node_;
   std::shared_ptr<rclcpp::executors::SingleThreadedExecutor> executor_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr homing_service_;
@@ -52,11 +58,18 @@ class ARHardwareInterface : public hardware_interface::SystemInterface {
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr string_subscription_;
   void handle_string_message(const std_msgs::msg::String::SharedPtr msg);
 
+   void handle_nudge_joint(
+    const std::shared_ptr<my_robot_interfaces::srv::NudgeJoint::Request> req,
+    std::shared_ptr<my_robot_interfaces::srv::NudgeJoint::Response> res);
+
+
+
   bool is_homing_ = false;
   bool is_homed_ = false;
   
   std::mutex string_mutex_;
   std::string last_received_string_;
+  rclcpp::Service<my_robot_interfaces::srv::NudgeJoint>::SharedPtr nudge_service_;
 
   rclcpp::Logger logger_ = rclcpp::get_logger("annin_ar4_driver");
   rclcpp::Clock clock_ = rclcpp::Clock(RCL_ROS_TIME);

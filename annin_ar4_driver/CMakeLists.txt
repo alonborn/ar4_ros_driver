@@ -19,6 +19,8 @@ find_package(rosidl_default_generators REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(hardware_interface REQUIRED)
+find_package(my_robot_interfaces REQUIRED)
+
 
 foreach(Dependency IN ITEMS ${THIS_PACKAGE_INCLUDE_DEPENDS})
   find_package(${Dependency} REQUIRED)
@@ -54,6 +56,8 @@ ament_target_dependencies(${PROJECT_NAME}
   hardware_interface
   std_srvs  # Add this line to link the std_srvs package
   std_msgs
+  hardware_interface
+  my_robot_interfaces
   Boost
 )
 

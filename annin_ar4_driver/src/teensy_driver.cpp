@@ -212,9 +212,9 @@ bool TeensyDriver::exchange(std::string outMsg) {
 bool TeensyDriver::transmit(std::string msg, std::string& err) {
   boost::system::error_code ec;
   const auto sendBuffer = boost::asio::buffer(msg.c_str(), msg.size());
-
+  // RCLCPP_INFO(logger_, "before write to serial: %s", msg.c_str());
   boost::asio::write(serial_port_, sendBuffer, ec);
-
+  // RCLCPP_INFO(logger_, "after write to serial: %s", msg.c_str());
   if (!ec) {
     return true;
   } else {
@@ -309,5 +309,66 @@ void TeensyDriver::parseValuesToVector(const std::string msg,
     prevIdx = currentIdx + 1;
   }
 }
+
+
+bool TeensyDriver::nudgeJointSteps(int joint_idx, int steps) {
+  RCLCPP_INFO(logger_, "Received nudge request: joint_idx=%d, steps=%d", joint_idx, steps);
+
+  if (!serial_port_.is_open()) {
+    RCLCPP_ERROR(logger_, "Serial port is not open; cannot send HM.");
+    return false;
+  }
+
+  if (joint_idx < 0 || joint_idx >= num_joints_) {
+    RCLCPP_ERROR(logger_, "HM joint_idx %d out of range [0,%d).", joint_idx, num_joints_);
+    return false;
+  }
+
+  // Build "HM a b c d e f\n" with zeros except the selected joint
+  std::array<int, 6> deltas{};
+  deltas.fill(0);
+  deltas[static_cast<size_t>(joint_idx)] = steps;
+
+  std::ostringstream oss;
+  oss << "HM ";
+  for (size_t i = 0; i < deltas.size(); ++i) {
+    oss << deltas[i];
+    if (i + 1 < deltas.size()) oss << ' ';
+  }
+  oss << "\n";
+
+  RCLCPP_DEBUG(logger_, "Constructed HM command: '%s'", oss.str().c_str());
+
+  {
+    std::lock_guard<std::mutex> lk(io_mutex_);
+    RCLCPP_INFO(logger_, "Sending HM command to Teensy...");
+    bool result = exchangeHM(oss.str());
+    if (result) {
+      RCLCPP_INFO(logger_, "HM command acknowledged by Teensy.");
+    } else {
+      RCLCPP_WARN(logger_, "HM command failed or no acknowledgment from Teensy.");
+    }
+    return result;
+  }
+}
+
+
+// Send HM and read until we see an HM completion line or an error.
+// Note: firmware prints free-form lines like:
+//   "Moving joint 3 by 5 steps."
+//   "HM: Manual move complete. New position set as home."
+//   "EEPROM updated."
+bool TeensyDriver::exchangeHM(const std::string& outMsg) {
+  std::string err;
+  RCLCPP_INFO(logger_, "About to write HM to serial: %s", outMsg.c_str());
+  if (!transmit(outMsg, err)) {
+    RCLCPP_ERROR(logger_, "HM transmit failed: %s", err.c_str());
+    return false;
+  }
+  RCLCPP_INFO(logger_, "transmit completed");
+  return true;
+  
+}
+
 
 }  // namespace annin_ar4_driver

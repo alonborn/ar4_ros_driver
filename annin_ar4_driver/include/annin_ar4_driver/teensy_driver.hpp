@@ -26,7 +26,11 @@ class TeensyDriver {
   bool calibrateSomeJoints(std::string joints);
   bool resetEStop();
   bool isEStopped();
-
+  
+  // Nudge a single joint by a number of motor steps (can be negative)
+  // joint_idx: 0..(num_joints_-1), steps: e.g., +5 or -5
+  bool nudgeJointSteps(int joint_idx, int steps);
+  
   TeensyDriver();
 
  private:
@@ -59,6 +63,12 @@ class TeensyDriver {
   void updateJointPositions(std::string msg);
   void updateJointVelocities(std::string msg);
   void updateEStopStatus(std::string msg);
+
+  // Special exchange for "HM" that tolerates non-header text and waits for completion
+  bool exchangeHM(const std::string& outMsg);
+
+  std::mutex io_mutex_;  // protect serial access if called from multiple
+    
 };
 
 }  // namespace annin_ar4_driver
