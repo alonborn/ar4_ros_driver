@@ -32,6 +32,9 @@ const float MOTOR_STEPS_PER_DEG_MK3[] = {44.44444444, 55.55555556, 55.55555556,
 
 const int MOTOR_STEPS_PER_REV[] = {400, 400, 400, 400, 800, 400};
 
+double ZERO_OFFSET_DEG[6] = {0};
+
+
 // set encoder pins
 Encoder encPos[6] = {Encoder(14, 15), Encoder(17, 16), Encoder(19, 18),
                      Encoder(20, 21), Encoder(23, 22), Encoder(24, 25)};
@@ -198,7 +201,7 @@ void ManualHomeOffset(String inData) {
   for (int i = 0; i < NUM_JOINTS; ++i) {
     // Convert deg/s limit to steps/s
     float maxStepsPerSec = JOINT_MAX_SPEED[i] * MOTOR_STEPS_PER_DEG[MODEL][i];
-    if (maxStepsPerSec < 100.0f) maxStepsPerSec = 100.0f; // floor to avoid too-low limits
+    if (maxStepsPerSec < 100.0f) maxStepsPerSec = 100.1835790f; // floor to avoid too-low limits
     stepperJoints[i].setMaxSpeed(maxStepsPerSec);
     // (Optional) nudge current speed toward max in the intended direction; run() ignores setSpeed,
     // but this won’t hurt and can help if you switch to runSpeedToPosition().
@@ -272,7 +275,7 @@ void ManualHomeOffset(String inData) {
   
   // Serial8.println("HM: Manual move complete. New position set as home.");
   Serial8.println("EEPROM updated.");
-
+  PrintOutEncodersAndLimitSwitch();
   // Serial.println("OK");
 }
 
@@ -564,13 +567,24 @@ void readMotorSteps(int* motorSteps,int * joints = NULL) {
   //delayMicroseconds(50);
 }
 
-void encStepsToJointPos(int* encSteps, double* jointPos,int * joints = NULL) {
-  for (int i = 0; i < NUM_JOINTS; ++i) {
-    if (joints != NULL && joints[i] == 0)
-      continue;
-    jointPos[i] = encSteps[i] / MOTOR_STEPS_PER_DEG[MODEL][i] * ENC_DIR[i];
+static inline bool homesToMin(int i) {
+  const double deg_per_step = ENC_DIR[i] / MOTOR_STEPS_PER_DEG[MODEL][i];
+  return (deg_per_step * CAL_DIR[i]) < 0; // <0 ⇒ moving toward MIN
+}
+
+static inline long encAtMin(int i) {
+  return (ENC_MAX_AT_ANGLE_MIN[i] == 1) ? (long)ENC_RANGE_STEPS[i] : 0L;
+}
+static inline long encAtMax(int i) {
+  return (ENC_MAX_AT_ANGLE_MIN[i] == 1) ? 0L : (long)ENC_RANGE_STEPS[i];
+}
+
+void WriteEncodersAtHomingLimit(const int* calJoints) {
+  for (int i = 0; i < NUM_JOINTS; ++i) if (!calJoints || calJoints[i]) {
+    encPos[i].write(homesToMin(i) ? encAtMin(i) : encAtMax(i));
   }
 }
+
 
 void jointPosToEncSteps(double* jointPos, int* encSteps,int * joints = NULL) {
   for (int i = 0; i < NUM_JOINTS; ++i) {
@@ -710,6 +724,21 @@ void MoveTo(const int* cmdSteps, int* motorSteps,int * joints = NULL,bool verbos
   }
 }
 
+void encStepsToJointPos(int* encStepsMS, double* jointPos, int* joints = NULL) {
+  // encStepsMS are motor steps (encPos.read() / ENC_MULT)
+  for (int i = 0; i < NUM_JOINTS; ++i) {
+    if (joints != NULL && joints[i] == 0) continue;
+
+    // steps -> degrees with wiring direction
+    double angle_deg = (double)encStepsMS[i] / MOTOR_STEPS_PER_DEG[MODEL][i] * ENC_DIR[i];
+
+    // subtract calibrated zero in degrees (same sign convention)
+    jointPos[i] = angle_deg - ZERO_OFFSET_DEG[i];
+  }
+}
+
+
+
 void MoveTo(String inData, int* motorSteps,int * joints = NULL) {
   double cmdJointPos[NUM_JOINTS] = {0};
   ParseMessage(inData, cmdJointPos);
@@ -723,10 +752,6 @@ void MoveTo(String inData, int* motorSteps,int * joints = NULL) {
       return;
     }
   }
-
-  // get current joint position
-  double curJointPos[NUM_JOINTS];
-  encStepsToJointPos(motorSteps, curJointPos,joints);
 
   // update target joint position
   int cmdEncSteps[NUM_JOINTS] = {0};
@@ -907,90 +932,91 @@ int check_encoder_connected (int* curMotorSteps,int* initialMotorSteps, int* joi
   return -1;
 }
 
-bool ReturnToOriginalPosition(String &outputMsg,int* calJoints) {
-  // return to original position
-  Serial8.println("start ReturnToOriginalPosition");
+bool ReturnToOriginalPosition(String &outputMsg, int* calJoints) {
+  Serial8.println("=== Start ReturnToOriginalPosition ===");
+
   unsigned long startTime = millis();
   int curMotorSteps[NUM_JOINTS];
-  readMotorSteps(curMotorSteps,calJoints);
-  Serial8.println("ReturnToOriginalPosition");
+  readMotorSteps(curMotorSteps, calJoints);
 
-  Serial8.print("Joint 5 - Current motorSteps[5]: ");
-  Serial8.println(curMotorSteps[5]);
-  Serial8.print("Joint 5 - Target REST_MOTOR_STEPS[5]: ");
-  Serial8.println(REST_MOTOR_STEPS[MODEL][5]);
-  Serial8.print("Joint 5 - ENC_DIR[5]: ");
-  Serial8.println(ENC_DIR[5]);
-
+  // Log initial step readings
+  Serial8.println("Initial motor steps:");
+  for (int i = 0; i < NUM_JOINTS; ++i) {
+    Serial8.print("  J"); Serial8.print(i+1);
+    Serial8.print(" current="); Serial8.print(curMotorSteps[i]);
+    Serial8.print(" target=");  Serial8.print(REST_MOTOR_STEPS[MODEL][i]);
+    Serial8.print(" ENC_DIR="); Serial8.println(ENC_DIR[i]);
+  }
 
   ResetJointAtPosition();
-  
-  // set all joints to 0 position - this is due to a bug in the Aceel Stepper, when you try to move the stepper in X steps and it's position is -X - it won't move
+
+  // Workaround for AccelStepper bug
   for (int i = 0 ; i < NUM_JOINTS; ++i) {
-    if (calJoints[i] == 1)
+    if (!calJoints || calJoints[i] == 1) {
       stepperJoints[i].setCurrentPosition(0);
-  }
-  //PrintRestMotorStepOffsets();
-
-  bool testWasDone = false;
-
-  int initialMotorSteps[NUM_JOINTS];
-  for (int i = 0; i < NUM_JOINTS; ++i) {
-    initialMotorSteps[i] = curMotorSteps[i];
+      Serial8.print("Joint "); Serial8.print(i+1); Serial8.println(": position reset to 0");
+    }
   }
 
-  Serial8.print ("initialMotorSteps:");
-  Serial8.println (initialMotorSteps[5]);
+  Serial8.println("Starting motion toward rest positions...");
 
-  while (!AtPosition(REST_MOTOR_STEPS[MODEL], curMotorSteps, 3,calJoints)) {
-    
+  while (!AtPosition(REST_MOTOR_STEPS[MODEL], curMotorSteps, 3, calJoints)) {
     if (millis() - startTime > 40000) {
       outputMsg = "ER: Failed to return to original position.";
-      Serial8.println("ER: Failed to return to original position.");
+      Serial8.println(outputMsg);
       PrintDiff(curMotorSteps);
       break;
     }
-    readMotorSteps(curMotorSteps,calJoints);
-    //delayMicroseconds(2);
 
-    // if ((millis() - startTime > 1000) && !testWasDone){  //wait 1 sec before checking if encoder is connected
-    //   testWasDone = true;
-    //   int badEncoder = -1;
-    //   badEncoder = check_encoder_connected (curMotorSteps,initialMotorSteps,calJoints);
-    //   if (badEncoder > -1) {
-    //     outputMsg = String("ER: Encoder not connected:") + badEncoder;
-    //     Serial8.println(outputMsg);
-    //     Serial8.println("Calibration Halted.");
-    //     return false;
+    readMotorSteps(curMotorSteps, calJoints);
+
+    // Log current diff from target
+    //Serial8.print("Progress: ");
+    // for (int i = 0; i < NUM_JOINTS; ++i) {
+    //   if (!calJoints || calJoints[i] == 1) {
+    //     long diff = REST_MOTOR_STEPS[MODEL][i] - curMotorSteps[i];
+    //     Serial8.print("J"); Serial8.print(i+1);
+    //     Serial8.print(" diff="); Serial8.print(diff);
+    //     Serial8.print(" cur="); Serial8.print(curMotorSteps[i]);
+    //     Serial8.print(" tgt="); Serial8.print(REST_MOTOR_STEPS[MODEL][i]);
+    //     Serial8.print(" | ");
     //   }
-
     // }
-    
-    MoveTo(REST_MOTOR_STEPS[MODEL], curMotorSteps,calJoints);
+    // Serial8.println();
+
+    MoveTo(REST_MOTOR_STEPS[MODEL], curMotorSteps, calJoints);
     for (int i = 0; i < NUM_JOINTS; ++i) {
-      if (calJoints[i] == 1)
+      if (!calJoints || calJoints[i] == 1) {
         safeRun(stepperJoints[i]);
+      }
     }
   }
 
-  startTime = millis();
+  Serial8.println("Reached original position (or timeout).");
 
-  Serial8.println("end of move");
+  Serial8.println("Final motor steps:");
+  for (int i = 0; i < NUM_JOINTS; ++i) {
+    Serial8.print("  J"); Serial8.print(i+1);
+    Serial8.print(" current="); Serial8.print(curMotorSteps[i]);
+    Serial8.print(" target=");  Serial8.print(REST_MOTOR_STEPS[MODEL][i]);
+    Serial8.println();
+  }
+
+  Serial8.println("=== End ReturnToOriginalPosition ===");
   return true;
 }
 
+
 bool doCalibrationRoutine(String& outputMsg, int* calJoints) {
-  // calibrate all joints 
-  //int calJoints[] = {1, 1, 1, 1, 1, 1};
-  //int calJoints[] = {1, 0,0,0,0,0};
   Serial8.println("Start Calibration");
 
-
+  // 1) If any selected joint is already on a limit, back off first
   if (!moveLimitedAwayFromLimitSwitch(calJoints)) {
     outputMsg = "ER: Failed to move away from limit switches at the start.";
     return false;
   }
 
+  // 2) Home the selected joints toward their limit switches
   Serial8.println("moving to limit switches");
   if (!moveToLimitSwitches(calJoints)) {
     outputMsg = "ER: Failed to move to limit switches.";
@@ -998,48 +1024,72 @@ bool doCalibrationRoutine(String& outputMsg, int* calJoints) {
   }
   Serial8.println("moveToLimitSwitches complete");
 
-  // record encoder steps
-  int calSteps[6];
+  // 3) Record raw encoder counts at the limit (for reporting)
+  int calSteps[NUM_JOINTS];
   for (int i = 0; i < NUM_JOINTS; ++i) {
     calSteps[i] = encPos[i].read();
   }
+
+  // 4) Set encoders to the correct limit value (0 or max) per wiring
   for (int i = 0; i < NUM_JOINTS; ++i) {
     encPos[i].write(ENC_RANGE_STEPS[i] * ENC_MAX_AT_ANGLE_MIN[i]);
   }
 
-  // move away from the limit switches a bit so that if the next command
-  // is in the wrong direction, the limit switches will not be run over
-  // immediately and become damaged.
+  // 5) Move off the switches a bit for safety
   if (!moveAwayFromLimitSwitch(calJoints)) {
     outputMsg = "ER: Failed to move away from limit switches.";
     return false;
   }
   Serial8.println("moveAwayFromLimitSwitch complete");
-  // restore original max speed
-  //
+
+  // 6) Restore nominal max speeds
   for (int i = 0; i < NUM_JOINTS; ++i) {
-    if (calJoints[i] == 0)
-      continue;
-    stepperJoints[i].setMaxSpeed(JOINT_MAX_SPEED[i] *
-                                 MOTOR_STEPS_PER_DEG[MODEL][i]);
+    if (calJoints[i] == 0) continue;
+    stepperJoints[i].setMaxSpeed(JOINT_MAX_SPEED[i] * MOTOR_STEPS_PER_DEG[MODEL][i]);
   }
 
-  if (ReturnToOriginalPosition(outputMsg,calJoints) == false) {
+  // 7) Return to configured REST_MOTOR_STEPS pose
+  if (!ReturnToOriginalPosition(outputMsg, calJoints)) {
     return false;
   }
 
+  // 8) Final report: encoders, limit switches
   Serial8.println("calibration complete");
-  // calibration done, send calibration values
-  // N.B. calibration values aren't used right now
-  outputMsg = String("JC") + "A" + calSteps[0] + "B" + calSteps[1] + "C" +
-              calSteps[2] + "D" + calSteps[3] + "E" + calSteps[4] + "F" +
-              calSteps[5];
+  outputMsg = String("JC") +
+              "A" + calSteps[0] +
+              "B" + calSteps[1] +
+              "C" + calSteps[2] +
+              "D" + calSteps[3] +
+              "E" + calSteps[4] +
+              "F" + calSteps[5];
   Serial8.println(outputMsg);
+
   PrintOutEncodersAndLimitSwitch();
+
+  // 9) Convert *current* motor steps → joint angles and print them
+  //    (Uses your encStepsToJointPos)
+  int curMotorSteps[NUM_JOINTS];
+  double curJointDeg[NUM_JOINTS];
+  double diffDeg[NUM_JOINTS] = {0.0};
+  // readMotorSteps returns motor steps = encPos.read() / ENC_MULT
+  readMotorSteps(curMotorSteps /*, calJoints*/);   // read all; omit mask
+  encStepsToJointPos(curMotorSteps, curJointDeg /*, nullptr*/);
+
+  Serial8.println("Final joint angles (deg) at end of calibration:");
+  for (int i = 0; i < NUM_JOINTS; ++i) {
+    Serial8.print("  J"); Serial8.print(i + 1); Serial8.print(": ");
+    Serial8.println(curJointDeg[i], 3);
+    diffDeg[i] = fabs(curJointDeg[i]) - fabs(JOINT_LIMIT_MIN[MODEL][i]);
+    Serial8.print("  Diff from min limit: ");
+    Serial8.println(diffDeg[i], 3);
+    ZERO_OFFSET_DEG[i] = diffDeg[i];
+    if (i == 0) 
+    {
+      ZERO_OFFSET_DEG[i] = -ZERO_OFFSET_DEG[i]; // for J1 we need to invert the offset
+    }
+  }
+
   return true;
-
-
-  
 }
 
 void updateMotorVelocities(int* motorSteps, int* lastMotorSteps,
