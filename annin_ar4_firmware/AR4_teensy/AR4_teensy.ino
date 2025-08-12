@@ -249,15 +249,7 @@ void ManualHomeOffset(String inData) {
     stepperJoints[i].setSpeed(prevSpeed[i]);
   }
 
-  delay(200);  // let motors settle
-
-  // Set encoder positions to match calibration logic
-  for (int i = 0; i < NUM_JOINTS; ++i) {
-    if (ENC_MAX_AT_ANGLE_MIN[i] == 1)
-      encPos[i].write(ENC_RANGE_STEPS[i]);
-    else
-      encPos[i].write(0);
-  }
+  delay(100);  // let motors settle
 
   Serial8.println("encoders are set to match home positions");
   // Update and save new rest steps
@@ -275,6 +267,9 @@ void ManualHomeOffset(String inData) {
   
   // Serial8.println("HM: Manual move complete. New position set as home.");
   Serial8.println("EEPROM updated.");
+
+  UpdateCalibrationOffsets(NULL);
+
   PrintOutEncodersAndLimitSwitch();
   // Serial.println("OK");
 }
@@ -1068,11 +1063,48 @@ bool doCalibrationRoutine(String& outputMsg, int* calJoints) {
 
   // 9) Convert *current* motor steps → joint angles and print them
   //    (Uses your encStepsToJointPos)
+  
+  UpdateCalibrationOffsets(calJoints);
+  
+  // int curMotorSteps[NUM_JOINTS];
+  // double curJointDeg[NUM_JOINTS];
+  // double diffDeg[NUM_JOINTS] = {0.0};
+  // // readMotorSteps returns motor steps = encPos.read() / ENC_MULT
+  // readMotorSteps(curMotorSteps /*, calJoints*/);   // read all; omit mask
+  // encStepsToJointPos(curMotorSteps, curJointDeg /*, nullptr*/);
+
+  // Serial8.println("Final joint angles (deg) at end of calibration:");
+  // for (int i = 0; i < NUM_JOINTS; ++i) {
+  //   Serial8.print("  J"); Serial8.print(i + 1); Serial8.print(": ");
+  //   Serial8.println(curJointDeg[i], 3);
+  //   diffDeg[i] = fabs(curJointDeg[i]) - fabs(JOINT_LIMIT_MIN[MODEL][i]);
+  //   Serial8.print("  Diff from min limit: ");
+  //   Serial8.println(diffDeg[i], 3);
+  //   ZERO_OFFSET_DEG[i] = diffDeg[i];
+  //   if (i == 0) 
+  //   {
+  //     ZERO_OFFSET_DEG[i] = -ZERO_OFFSET_DEG[i]; // for J1 we need to invert the offset
+  //   }
+  // }
+
+  return true;
+}
+
+void UpdateCalibrationOffsets(int* calJoints) {
   int curMotorSteps[NUM_JOINTS];
   double curJointDeg[NUM_JOINTS];
   double diffDeg[NUM_JOINTS] = {0.0};
+
+  for (int i = 0; i < NUM_JOINTS; ++i) 
+    if (calJoints == NULL || calJoints[i] == 1) {
+      ZERO_OFFSET_DEG[i] = 0.0; // no calibration for this joint
+      continue;
+    }
+
   // readMotorSteps returns motor steps = encPos.read() / ENC_MULT
   readMotorSteps(curMotorSteps /*, calJoints*/);   // read all; omit mask
+
+
   encStepsToJointPos(curMotorSteps, curJointDeg /*, nullptr*/);
 
   Serial8.println("Final joint angles (deg) at end of calibration:");
@@ -1088,8 +1120,6 @@ bool doCalibrationRoutine(String& outputMsg, int* calJoints) {
       ZERO_OFFSET_DEG[i] = -ZERO_OFFSET_DEG[i]; // for J1 we need to invert the offset
     }
   }
-
-  return true;
 }
 
 void updateMotorVelocities(int* motorSteps, int* lastMotorSteps,
