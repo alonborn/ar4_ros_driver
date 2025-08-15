@@ -31,7 +31,7 @@
     allow_partial_joints_goal: false
     allow_nonzero_velocity_at_trajectory_end: true
     constraints:
-      stopped_velocity_tolerance: 0.02
+      stopped_velocity_tolerance: 0.05
       goal_time: 0.0
       $(var tf_prefix)joint_1: { trajectory: 0.2, goal: 0.02 }
       $(var tf_prefix)joint_2: { trajectory: 0.2, goal: 0.02 }
