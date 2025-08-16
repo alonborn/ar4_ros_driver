@@ -1383,7 +1383,14 @@ void stateTRAJ() {
         Serial8.println("Dispatch: Handling CG command.");
         moveServoTo(maxServoAngle);
       }
-
+      else if (inData.startsWith("SA")) { 
+        Serial8.println("Moving Servo to Angle");
+        SetServoAngle(inData); // Set Servo Angle
+      } 
+      else {
+        Serial8.print("couldnt process:");
+        Serial8.println(inData);
+      }
       inData = "";  // clear message
     }
 
@@ -1392,6 +1399,26 @@ void stateTRAJ() {
     }
   }
 }
+
+void SetServoAngle(String inData) {
+  // parse the angle
+  int spaceIdx = 1;
+  if (spaceIdx > 0) {
+    double req = inData.substring(spaceIdx + 1).toFloat();
+
+    if (req < 0) req = 0;
+    if (req > 50) req = 50;
+
+    // move (blocking stepped move, matches your OG/CG behavior)
+    moveServoTo((int)req);
+
+    // ACK back to host over Serial (USB)
+    SendToROS(String("SAOK") + req);    // e.g. "SAOK23"
+  } else {
+    SendToROS("ER: SA missing angle");
+  }
+}
+
 
 void stateERR() {
   // enter holding state

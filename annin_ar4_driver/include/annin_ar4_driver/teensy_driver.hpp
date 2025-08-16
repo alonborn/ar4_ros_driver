@@ -26,6 +26,8 @@ class TeensyDriver {
   bool calibrateSomeJoints(std::string joints);
   bool openGripper();
   bool closeGripper();
+  bool moveServoToAngle(double angle_deg);
+
   bool resetEStop();
   bool isEStopped();
   

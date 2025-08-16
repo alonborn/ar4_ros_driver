@@ -310,6 +310,38 @@ void TeensyDriver::parseValuesToVector(const std::string msg,
   }
 }
 
+
+bool TeensyDriver::moveServoToAngle(double angle_deg) {
+  
+  auto clamp = [](double v, double lo, double hi) {
+      if (v < lo) return lo;
+      if (v > hi) return hi;
+      return v;
+  };
+
+  // clamp for safety
+  if (std::isnan(angle_deg)) angle_deg = 0.0;
+  angle_deg = clamp(angle_deg, 0.0, 180.0);
+
+  std::ostringstream oss;
+  // Example protocol: "SV" + integer degrees + newline
+  oss << "SA" << static_cast<int>(std::round(angle_deg)) << "\n";
+
+  // RCLCPP_INFO(logger_, "Requesting servo angle: %.2f deg (cmd='%s')",
+  //             angle_deg, oss.str().c_str());
+
+  std::string err;
+  bool retval= transmit(oss.str(),err);
+
+  // RCLCPP_INFO(logger_, "Request sent");
+  return retval;
+  // If your firmware just ACKs and you don’t need a state update parsed,
+  // you could use transmit() like OG/CG optimization, but sendCommand()
+  // is safer because it reads the response and error headers.
+}
+
+
+
 bool TeensyDriver::openGripper() {
   std::lock_guard<std::mutex> lk(io_mutex_);
   std::string err;

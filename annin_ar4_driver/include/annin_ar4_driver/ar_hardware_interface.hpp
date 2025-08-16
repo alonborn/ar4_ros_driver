@@ -10,6 +10,8 @@
 #include "std_srvs/srv/trigger.hpp"
 #include "std_msgs/msg/string.hpp"
 #include "my_robot_interfaces/srv/nudge_joint.hpp"     // NEW
+#include <my_robot_interfaces/srv/move_servo_to_angle.hpp>
+
 #include <rclcpp/qos.hpp>                            // for rclcpp::ServicesQoS
 
 
@@ -51,6 +53,11 @@ class ARHardwareInterface : public hardware_interface::SystemInterface {
   // joint_idx in [0..N-1], steps e.g. +5 / -5
   bool nudgeJointSteps(int joint_idx, int steps);
 
+
+  void handle_move_servo_to_angle(
+    const std::shared_ptr<my_robot_interfaces::srv::MoveServoToAngle::Request> req,
+    std::shared_ptr<my_robot_interfaces::srv::MoveServoToAngle::Response> res);
+
   // --- NEW: service handlers ---
   void handle_open_gripper(
     const std::shared_ptr<std_srvs::srv::Trigger::Request>,
@@ -65,6 +72,8 @@ class ARHardwareInterface : public hardware_interface::SystemInterface {
   std::shared_ptr<rclcpp::Node> node_;
   std::shared_ptr<rclcpp::executors::SingleThreadedExecutor> executor_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr homing_service_;
+  rclcpp::Service<my_robot_interfaces::srv::MoveServoToAngle>::SharedPtr move_servo_srv_;
+
   std::thread service_thread_;
 
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr string_subscription_;

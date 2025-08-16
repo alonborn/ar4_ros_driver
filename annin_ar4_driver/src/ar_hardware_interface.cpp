@@ -176,6 +176,11 @@ hardware_interface::CallbackReturn ARHardwareInterface::on_configure(
     std::bind(&ARHardwareInterface::handle_homing_request, this,
       std::placeholders::_1, std::placeholders::_2));
 
+  move_servo_srv_ = node_->create_service<my_robot_interfaces::srv::MoveServoToAngle>(
+    "~/move_servo_to_angle",
+    std::bind(&ARHardwareInterface::handle_move_servo_to_angle, this,
+              std::placeholders::_1, std::placeholders::_2));
+
 
   open_gripper_srv_ = node_->create_service<std_srvs::srv::Trigger>(
     "~/open_gripper",
@@ -209,6 +214,28 @@ hardware_interface::CallbackReturn ARHardwareInterface::on_configure(
 
   return hardware_interface::CallbackReturn::SUCCESS;
 }
+
+
+void ARHardwareInterface::handle_move_servo_to_angle(
+  const std::shared_ptr<my_robot_interfaces::srv::MoveServoToAngle::Request> req,
+  std::shared_ptr<my_robot_interfaces::srv::MoveServoToAngle::Response> res)
+{
+  RCLCPP_INFO(logger_, "MoveServoToAngle called: %.2f deg", req->angle_deg);
+
+  if (driver_.isEStopped()) {
+    res->success = false;
+    res->message = "E-Stop active";
+    return;
+  }
+
+  // optional clamp (depends on your hardware)
+  const double clamped = std::clamp<double>(req->angle_deg, 0.0, 180.0);
+
+  const bool ok = driver_.moveServoToAngle(clamped);
+  res->success = ok;
+  res->message = ok ? "Servo moved" : "MoveServoToAngle failed";
+}
+
 
 void ARHardwareInterface::handle_open_gripper(
   const std::shared_ptr<std_srvs::srv::Trigger::Request>,
