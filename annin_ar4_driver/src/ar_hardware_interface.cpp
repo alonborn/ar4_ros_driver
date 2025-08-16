@@ -176,6 +176,18 @@ hardware_interface::CallbackReturn ARHardwareInterface::on_configure(
     std::bind(&ARHardwareInterface::handle_homing_request, this,
       std::placeholders::_1, std::placeholders::_2));
 
+
+  open_gripper_srv_ = node_->create_service<std_srvs::srv::Trigger>(
+    "~/open_gripper",
+    std::bind(&ARHardwareInterface::handle_open_gripper, this,
+              std::placeholders::_1, std::placeholders::_2));
+
+  close_gripper_srv_ = node_->create_service<std_srvs::srv::Trigger>(
+    "~/close_gripper",
+    std::bind(&ARHardwareInterface::handle_close_gripper, this,
+              std::placeholders::_1, std::placeholders::_2));
+
+
   // String topic (existing)
   string_subscription_ = node_->create_subscription<std_msgs::msg::String>(
     "~/homing_string", 10,
@@ -197,6 +209,41 @@ hardware_interface::CallbackReturn ARHardwareInterface::on_configure(
 
   return hardware_interface::CallbackReturn::SUCCESS;
 }
+
+void ARHardwareInterface::handle_open_gripper(
+  const std::shared_ptr<std_srvs::srv::Trigger::Request>,
+  std::shared_ptr<std_srvs::srv::Trigger::Response> res)
+{
+  RCLCPP_INFO(logger_, "OpenGripper service called");
+
+  if (driver_.isEStopped()) {
+    res->success = false;
+    res->message = "E-Stop active";
+    return;
+  }
+
+  const bool ok = driver_.openGripper();
+  res->success = ok;
+  res->message = ok ? "Gripper opened" : "OpenGripper failed";
+}
+
+void ARHardwareInterface::handle_close_gripper(
+  const std::shared_ptr<std_srvs::srv::Trigger::Request>,
+  std::shared_ptr<std_srvs::srv::Trigger::Response> res)
+{
+  RCLCPP_INFO(logger_, "CloseGripper service called");
+
+  if (driver_.isEStopped()) {
+    res->success = false;
+    res->message = "E-Stop active";
+    return;
+  }
+
+  const bool ok = driver_.closeGripper();
+  res->success = ok;
+  res->message = ok ? "Gripper closed" : "CloseGripper failed";
+}
+
 
 void ARHardwareInterface::handle_string_message(const std_msgs::msg::String::SharedPtr msg) {
   std::lock_guard<std::mutex> lock(string_mutex_);

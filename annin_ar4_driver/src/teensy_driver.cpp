@@ -310,6 +310,21 @@ void TeensyDriver::parseValuesToVector(const std::string msg,
   }
 }
 
+bool TeensyDriver::openGripper() {
+  std::lock_guard<std::mutex> lk(io_mutex_);
+  std::string err;
+  RCLCPP_INFO(logger_, "Opening gripper...");
+  bool retval =  transmit("OG\n",err);
+  return retval;
+}
+
+bool TeensyDriver::closeGripper() {
+  std::lock_guard<std::mutex> lk(io_mutex_);
+  std::string err;
+  RCLCPP_INFO(logger_, "Closing gripper...");
+  bool retval =  transmit("CG\n",err);
+  return retval;
+}
 
 bool TeensyDriver::nudgeJointSteps(int joint_idx, int steps) {
   RCLCPP_INFO(logger_, "Received nudge request: joint_idx=%d, steps=%d", joint_idx, steps);

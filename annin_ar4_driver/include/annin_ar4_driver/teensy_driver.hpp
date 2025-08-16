@@ -24,6 +24,8 @@ class TeensyDriver {
   void getJointVelocities(std::vector<double>& joint_velocities);
   bool calibrateJoints();
   bool calibrateSomeJoints(std::string joints);
+  bool openGripper();
+  bool closeGripper();
   bool resetEStop();
   bool isEStopped();
   

@@ -4,6 +4,7 @@
 #include <avr/pgmspace.h>
 #include <math.h>
 #include <EEPROM.h>  
+#include <Servo.h>
 
 #include <map>
 
@@ -21,6 +22,15 @@ const int ESTOP_PIN = 39;
 const int STEP_PINS[] = {0, 2, 4, 6, 8, 10};
 const int DIR_PINS[] = {1, 3, 5, 7, 9, 11};
 const int LIMIT_PINS[] = {26, 27, 28, 29, 30, 31};
+
+const int servoPin = 40;
+Servo myServo;
+
+const int minServoAngle = 0;
+const int maxServoAngle = 40;
+const int ServoAngleStep = 1;
+int ServoStepDelay = 5; // Default delay (ms)
+
 
 std::map<String, const float*> MOTOR_STEPS_PER_DEG;
 const float MOTOR_STEPS_PER_DEG_MK1[] = {44.44444444, 55.55555556, 55.55555556,
@@ -359,7 +369,8 @@ void setup() {
   while (!Serial8) {
     ; // Wait for Serial port to connect
   }
-  
+  myServo.attach(servoPin);
+  moveServoTo(minServoAngle);
   Serial8.println("------------Setup Started---------------");
   MOTOR_STEPS_PER_DEG["mk1"] = MOTOR_STEPS_PER_DEG_MK1;
   MOTOR_STEPS_PER_DEG["mk2"] = MOTOR_STEPS_PER_DEG_MK2;
@@ -1218,6 +1229,17 @@ void ProcessCalibrationString(String input, int * calJoints) {
     Serial8.println();
 }
 
+void moveServoTo(int targetAngle) {
+  int currentAngle = myServo.read();
+  int step = (targetAngle > currentAngle) ? ServoAngleStep : -ServoAngleStep;
+
+  for (int angle = currentAngle; angle != targetAngle; angle += step) {
+    myServo.write(angle);
+    delay(ServoStepDelay);
+  }
+  myServo.write(targetAngle); // Ensure exact position
+}
+
 
 
 void stateTRAJ() {
@@ -1352,6 +1374,14 @@ void stateTRAJ() {
       else if (inData.startsWith("ED")) {
         Serial8.println("Dispatch: Handling ED command.");
         SaveRestStepsFromCommand(inData);
+      }
+      else if (function == "OG") { // Open Gripper
+        Serial8.println("Dispatch: Handling OG command.");
+        moveServoTo(minServoAngle);
+      }
+      else if (function == "CG") { // Close Gripper
+        Serial8.println("Dispatch: Handling CG command.");
+        moveServoTo(maxServoAngle);
       }
 
       inData = "";  // clear message

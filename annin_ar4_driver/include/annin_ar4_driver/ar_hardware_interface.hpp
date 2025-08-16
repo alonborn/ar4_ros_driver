@@ -38,7 +38,9 @@ class ARHardwareInterface : public hardware_interface::SystemInterface {
   hardware_interface::CallbackReturn on_configure(
         const rclcpp_lifecycle::State & previous_state) override;
 
-        
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr open_gripper_srv_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr close_gripper_srv_;
+
   // Homing service handler
   void handle_homing_request(
     const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
@@ -48,6 +50,16 @@ class ARHardwareInterface : public hardware_interface::SystemInterface {
   // NEW: direct API to nudge one joint by a number of motor steps (can be negative)
   // joint_idx in [0..N-1], steps e.g. +5 / -5
   bool nudgeJointSteps(int joint_idx, int steps);
+
+  // --- NEW: service handlers ---
+  void handle_open_gripper(
+    const std::shared_ptr<std_srvs::srv::Trigger::Request>,
+    std::shared_ptr<std_srvs::srv::Trigger::Response>);
+
+  void handle_close_gripper(
+    const std::shared_ptr<std_srvs::srv::Trigger::Request>,
+    std::shared_ptr<std_srvs::srv::Trigger::Response>);
+
 
  private:
   std::shared_ptr<rclcpp::Node> node_;
