@@ -26,7 +26,7 @@ const int LIMIT_PINS[] = {26, 27, 28, 29, 30, 31};
 const int servoPin = 40;
 Servo myServo;
 
-const int minServoAngle = 0;
+const int minServoAngle = 30;
 const int maxServoAngle = 40;
 const int ServoAngleStep = 1;
 int ServoStepDelay = 5; // Default delay (ms)
@@ -1406,8 +1406,8 @@ void SetServoAngle(String inData) {
   if (spaceIdx > 0) {
     double req = inData.substring(spaceIdx + 1).toFloat();
 
-    if (req < 0) req = 0;
-    if (req > 50) req = 50;
+    // if (req < 0) req = 0;
+    // if (req > 50) req = 50;
 
     // move (blocking stepped move, matches your OG/CG behavior)
     moveServoTo((int)req);
