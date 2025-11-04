@@ -46,7 +46,7 @@ double ZERO_OFFSET_DEG[6] = {0};
 
 
 // set encoder pins
-Encoder encPos[6] = {Encoder(14, 15), Encoder(17, 16), Encoder(19, 18),
+Encoder encPos[6] = {Encoder(15, 14), Encoder(16, 17), Encoder(18, 19),
                      Encoder(20, 21), Encoder(23, 22), Encoder(24, 25)};
 // +1 if encoder direction matches motor direction, -1 otherwise
 int ENC_DIR[] = {-1, 1, 1, 1, 1, 1};
@@ -844,17 +844,17 @@ bool moveToLimitSwitches(int* calJoints) {
 }
 
 void PrintOutEncodersAndLimitSwitch() {
-  Serial8.print ("Enc:");
+  Serial.print ("Enc:");
   for (int i = 0; i < NUM_JOINTS; ++i) {
     int encValue = encPos[i].read();
-    Serial8.print (encValue);
-    Serial8.print (" ");
+    Serial.print (encValue);
+    Serial.print (" ");
   } 
-  Serial8.print ("LimitSwitch:");
+  Serial.print ("LimitSwitch:");
   updateAllLimitSwitches();
   for (int i = 0; i < NUM_JOINTS; ++i) {
       String Value = limitSwitches[i].isPressed() ? "1 " : "0 ";
-      Serial8.print(Value);
+      Serial.print(Value);
   }
  
   Serial8.println (" ");
@@ -977,18 +977,18 @@ bool ReturnToOriginalPosition(String &outputMsg, int* calJoints) {
     readMotorSteps(curMotorSteps, calJoints);
 
     // Log current diff from target
-    //Serial8.print("Progress: ");
-    // for (int i = 0; i < NUM_JOINTS; ++i) {
-    //   if (!calJoints || calJoints[i] == 1) {
-    //     long diff = REST_MOTOR_STEPS[MODEL][i] - curMotorSteps[i];
-    //     Serial8.print("J"); Serial8.print(i+1);
-    //     Serial8.print(" diff="); Serial8.print(diff);
-    //     Serial8.print(" cur="); Serial8.print(curMotorSteps[i]);
-    //     Serial8.print(" tgt="); Serial8.print(REST_MOTOR_STEPS[MODEL][i]);
-    //     Serial8.print(" | ");
-    //   }
-    // }
-    // Serial8.println();
+    Serial8.print("Progress: ");
+    for (int i = 0; i < NUM_JOINTS; ++i) {
+      if (!calJoints || calJoints[i] == 1) {
+        long diff = REST_MOTOR_STEPS[MODEL][i] - curMotorSteps[i];
+        Serial8.print("J"); Serial8.print(i+1);
+        Serial8.print(" diff="); Serial8.print(diff);
+        Serial8.print(" cur="); Serial8.print(curMotorSteps[i]);
+        Serial8.print(" tgt="); Serial8.print(REST_MOTOR_STEPS[MODEL][i]);
+        Serial8.print(" | ");
+      }
+    }
+    Serial8.println();
 
     MoveTo(REST_MOTOR_STEPS[MODEL], curMotorSteps, calJoints);
     for (int i = 0; i < NUM_JOINTS; ++i) {
