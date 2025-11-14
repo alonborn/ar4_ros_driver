@@ -104,6 +104,9 @@ float JOINT_MAX_SPEED[] = {60.0, 60.0, 60.0, 60.0, 60.0, 60.0};  // deg/s
 float JOINT_MAX_ACCEL[] = {30.0, 30.0, 30.0, 30.0, 30.0, 30.0};  // deg/s^2
 char JOINT_NAMES[] = {'A', 'B', 'C', 'D', 'E', 'F'};
 
+float JOINT_MAX_SPEED_ORIGINAL[NUM_JOINTS];
+float globalSpeedScale = 1.0;
+
 
 bool isJointAtPosition[6];
 
@@ -277,10 +280,10 @@ void ManualHomeOffset(String inData) {
   
   // Serial8.println("HM: Manual move complete. New position set as home.");
   Serial8.println("EEPROM updated.");
-
+  Serial8.println("Updating Calibration Offsets");
   UpdateCalibrationOffsets(NULL);
-
-  PrintOutEncodersAndLimitSwitch();
+  Serial8.println("Encoders and Limit Switches:");
+  PrintOutEncodersAndLimitSwitchS8();
   // Serial.println("OK");
 }
 
@@ -406,11 +409,13 @@ void setup() {
   pinMode(ESTOP_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(ESTOP_PIN), estopPressed, FALLING);
 
+  // Store original max speeds (deg/s)
+  for (int i = 0; i < NUM_JOINTS; i++) {
+      JOINT_MAX_SPEED_ORIGINAL[i] = JOINT_MAX_SPEED[i];
+  }
 
-  delay (500);
+  delay (200);
 
-
-  
   Serial8.println("------------Setup Ended---------------");
   Serial8.flush();
 }
@@ -584,6 +589,38 @@ static inline long encAtMin(int i) {
 static inline long encAtMax(int i) {
   return (ENC_MAX_AT_ANGLE_MIN[i] == 1) ? 0L : (long)ENC_RANGE_STEPS[i];
 }
+
+
+
+void SetGlobalSpeedScale(String inData) {
+  // Expect command like "SF 0.6"
+  float scale = inData.substring(2).toFloat();
+
+  if (scale <= 0 || scale > 2.0) {
+    Serial8.println("ER: invalid scale (allowed 0 < scale ≤ 2.0)");
+    return;
+  }
+
+  globalSpeedScale = scale;
+
+  // Apply to all joints
+  for (int i = 0; i < NUM_JOINTS; i++) {
+    JOINT_MAX_SPEED[i] = JOINT_MAX_SPEED_ORIGINAL[i] * globalSpeedScale;
+    stepperJoints[i].setMaxSpeed(
+      JOINT_MAX_SPEED[i] * MOTOR_STEPS_PER_DEG[MODEL][i]
+    );
+  }
+
+  Serial8.print("SF: Global speed scale set to ");
+  Serial8.println(globalSpeedScale);
+  Serial8.print("SF: New joint max speeds (deg/s): ");
+  for (int i = 0; i < NUM_JOINTS; i++) {
+    Serial8.print(JOINT_MAX_SPEED[i]);
+    Serial8.print(" ");
+  }
+  Serial8.println();
+}
+
 
 void WriteEncodersAtHomingLimit(const int* calJoints) {
   for (int i = 0; i < NUM_JOINTS; ++i) if (!calJoints || calJoints[i]) {
@@ -813,10 +850,12 @@ bool moveToLimitSwitches(int* calJoints) {
     stepperJoints[i].setMaxSpeed(CAL_SPEED * CAL_SPEED_MULT[i] * CAL_DIR[i]);
     stepperJoints[i].setSpeed(CAL_SPEED * CAL_SPEED_MULT[i] * CAL_DIR[i]);
   }
+  Serial8.println("Speed was set");
   unsigned long startTime = millis();
   while (!calAllDone) {
     updateAllLimitSwitches();
-    
+    // if (millis() %1000 == 0)
+    //   Serial8.println ("moving to limit switches");
     calAllDone = true;
     for (int i = 0; i < NUM_JOINTS; ++i) {
       // if joint is not calibrated yet
@@ -839,11 +878,32 @@ bool moveToLimitSwitches(int* calJoints) {
       return false;
     }
   }
-  delay(2000);
+  Serial8.println("reached all limit swiches");
+  delay(1000);
   return true;
 }
 
-void PrintOutEncodersAndLimitSwitch() {
+void PrintOutEncodersAndLimitSwitchS8() {
+  Serial8.print ("Enc:");
+  for (int i = 0; i < NUM_JOINTS; ++i) {
+    int encValue = encPos[i].read();
+    Serial8.print (encValue);
+    Serial8.print (" ");
+  } 
+  Serial8.print ("LimitSwitch:");
+  updateAllLimitSwitches();
+  for (int i = 0; i < NUM_JOINTS; ++i) {
+      String Value = limitSwitches[i].isPressed() ? "1 " : "0 ";
+      Serial8.print(Value);
+  }
+ 
+  Serial8.println (" ");
+  Serial8.flush();
+}
+
+
+
+void PrintOutEncodersAndLimitSwitchS1() {
   Serial.print ("Enc:");
   for (int i = 0; i < NUM_JOINTS; ++i) {
     int encValue = encPos[i].read();
@@ -858,6 +918,7 @@ void PrintOutEncodersAndLimitSwitch() {
   }
  
   Serial.println (" ");
+  Serial.flush();
 }
 
 
@@ -1070,7 +1131,7 @@ bool doCalibrationRoutine(String& outputMsg, int* calJoints) {
               "F" + calSteps[5];
   Serial8.println(outputMsg);
 
-  PrintOutEncodersAndLimitSwitch();
+  PrintOutEncodersAndLimitSwitchS8();
 
   // 9) Convert *current* motor steps → joint angles and print them
   //    (Uses your encStepsToJointPos)
@@ -1097,7 +1158,8 @@ bool doCalibrationRoutine(String& outputMsg, int* calJoints) {
   //     ZERO_OFFSET_DEG[i] = -ZERO_OFFSET_DEG[i]; // for J1 we need to invert the offset
   //   }
   // }
-
+  Serial8.println("End of Calibration Process");
+  Serial8.flush();
   return true;
 }
 
@@ -1343,13 +1405,14 @@ void stateTRAJ() {
           }
         }
         SendToROS(msg);
+        Serial8.println("Completed handling calibration");
       } else if (function == "RE") {
         resetEstop();
         // update host with Estop status after trying to reset it
         String msg = String("ES") + estop_pressed;
         SendToROS(msg);
       } else if (function == "LE") {//test Limit switches and encoders
-        PrintOutEncodersAndLimitSwitch();
+        PrintOutEncodersAndLimitSwitchS1();
       } else if (function == "GR") {
         PrintRestMotorStepOffsets();
       }
@@ -1382,6 +1445,9 @@ void stateTRAJ() {
       else if (function == "CG") { // Close Gripper
         Serial8.println("Dispatch: Handling CG command.");
         moveServoTo(maxServoAngle);
+      }
+      else if (function == "SF") {
+          SetGlobalSpeedScale(inData);
       }
       else if (inData.startsWith("SA")) { 
         Serial8.println("Moving Servo to Angle");

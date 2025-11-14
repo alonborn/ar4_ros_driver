@@ -133,6 +133,39 @@ bool TeensyDriver::calibrateSomeJoints(std::string joints) {
   RCLCPP_INFO(logger_, "Calibration message to be sent: %s", outMsg.c_str());
   return sendCommand(outMsg);
 }
+
+bool TeensyDriver::setGlobalSpeedScale(double scale)
+{
+    std::lock_guard<std::mutex> lock(io_mutex_);
+
+    if (!initialised_) {
+        RCLCPP_ERROR(logger_, "Cannot set speed scale: driver not initialised");
+        return false;
+    }
+
+    if (scale <= 0.0 || scale > 3.0) {   // safe bounds
+        RCLCPP_ERROR(logger_, "Invalid speed scale %.3f (must be 0 < scale <= 3)", scale);
+        return false;
+    }
+
+    std::stringstream ss;
+    ss << "SF " << scale << "\n";
+    std::string cmd = ss.str();
+
+    RCLCPP_INFO(logger_, "Sending speed scale command to Teensy: %s", cmd.c_str());
+
+    std::string err;
+    bool ok = transmit(cmd, err);
+
+    if (!ok) {
+        RCLCPP_ERROR(logger_, "Failed to send SF command: %s", err.c_str());
+        return false;
+    }
+
+    return true;
+}
+
+
 void TeensyDriver::getJointPositions(std::vector<double>& joint_positions) {
   // get current joint positions
   std::string msg = "JP\n";
@@ -201,6 +234,8 @@ bool TeensyDriver::exchange(std::string outMsg) {
       } else {
         // unknown header
         RCLCPP_WARN(logger_, "Unknown header %s", header.c_str());
+        RCLCPP_WARN(logger_, "Unknown header (full header:) %s", inMsg.c_str());
+
         return false;
       }
       return true;

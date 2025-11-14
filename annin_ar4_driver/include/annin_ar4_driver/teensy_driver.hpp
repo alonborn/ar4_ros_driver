@@ -24,6 +24,8 @@ class TeensyDriver {
   void getJointVelocities(std::vector<double>& joint_velocities);
   bool calibrateJoints();
   bool calibrateSomeJoints(std::string joints);
+  bool setGlobalSpeedScale(double scale);
+
   bool openGripper();
   bool closeGripper();
   bool moveServoToAngle(double angle_deg);

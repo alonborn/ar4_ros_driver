@@ -182,6 +182,13 @@ hardware_interface::CallbackReturn ARHardwareInterface::on_configure(
               std::placeholders::_1, std::placeholders::_2));
 
 
+  set_speed_scale_srv_ = node_->create_service<my_robot_interfaces::srv::SetSpeedScale>(
+      "~/set_speed_scale",
+      std::bind(&ARHardwareInterface::handle_set_speed_scale, this,
+                std::placeholders::_1,
+                std::placeholders::_2));
+
+
   open_gripper_srv_ = node_->create_service<std_srvs::srv::Trigger>(
     "~/open_gripper",
     std::bind(&ARHardwareInterface::handle_open_gripper, this,
@@ -214,6 +221,33 @@ hardware_interface::CallbackReturn ARHardwareInterface::on_configure(
 
   return hardware_interface::CallbackReturn::SUCCESS;
 }
+
+void ARHardwareInterface::handle_set_speed_scale(
+  const std::shared_ptr<my_robot_interfaces::srv::SetSpeedScale::Request> req,
+  std::shared_ptr<my_robot_interfaces::srv::SetSpeedScale::Response> res)
+{
+  const double scale = req->scale;
+  RCLCPP_INFO(logger_, "SetSpeedScale requested: %.3f", scale);
+
+  if (driver_.isEStopped()) {
+    res->success = false;
+    res->message = "E-Stop active";
+    RCLCPP_ERROR(logger_, "Cannot set speed scale: E-Stop active");
+    return;
+  }
+
+  bool ok = driver_.setGlobalSpeedScale(scale);
+
+  res->success = ok;
+  if (ok) {
+    res->message = "Speed scale updated";
+    RCLCPP_INFO(logger_, "Speed scale set to %.3f", scale);
+  } else {
+    res->message = "Failed to update speed scale";
+    RCLCPP_ERROR(logger_, "Failed updating speed scale to %.3f", scale);
+  }
+}
+
 
 
 void ARHardwareInterface::handle_move_servo_to_angle(

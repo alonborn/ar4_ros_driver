@@ -11,6 +11,7 @@
 #include "std_msgs/msg/string.hpp"
 #include "my_robot_interfaces/srv/nudge_joint.hpp"     // NEW
 #include <my_robot_interfaces/srv/move_servo_to_angle.hpp>
+#include <my_robot_interfaces/srv/set_speed_scale.hpp>
 
 #include <rclcpp/qos.hpp>                            // for rclcpp::ServicesQoS
 
@@ -40,6 +41,11 @@ class ARHardwareInterface : public hardware_interface::SystemInterface {
   hardware_interface::CallbackReturn on_configure(
         const rclcpp_lifecycle::State & previous_state) override;
 
+  void handle_set_speed_scale(
+    const std::shared_ptr<my_robot_interfaces::srv::SetSpeedScale::Request> req,
+    std::shared_ptr<my_robot_interfaces::srv::SetSpeedScale::Response> res);
+
+  rclcpp::Service<my_robot_interfaces::srv::SetSpeedScale>::SharedPtr set_speed_scale_srv_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr open_gripper_srv_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr close_gripper_srv_;
 
