@@ -373,7 +373,7 @@ void setup() {
     ; // Wait for Serial port to connect
   }
   myServo.attach(servoPin);
-  moveServoTo(minServoAngle);
+  moveServoTo(70);
   Serial8.println("------------Setup Started---------------");
   MOTOR_STEPS_PER_DEG["mk1"] = MOTOR_STEPS_PER_DEG_MK1;
   MOTOR_STEPS_PER_DEG["mk2"] = MOTOR_STEPS_PER_DEG_MK2;
@@ -606,9 +606,7 @@ void SetGlobalSpeedScale(String inData) {
   // Apply to all joints
   for (int i = 0; i < NUM_JOINTS; i++) {
     JOINT_MAX_SPEED[i] = JOINT_MAX_SPEED_ORIGINAL[i] * globalSpeedScale;
-    stepperJoints[i].setMaxSpeed(
-      JOINT_MAX_SPEED[i] * MOTOR_STEPS_PER_DEG[MODEL][i]
-    );
+    stepperJoints[i].setMaxSpeed(JOINT_MAX_SPEED[i] * MOTOR_STEPS_PER_DEG[MODEL][i]);
   }
 
   Serial8.print("SF: Global speed scale set to ");
@@ -1292,14 +1290,16 @@ void ProcessCalibrationString(String input, int * calJoints) {
 }
 
 void moveServoTo(int targetAngle) {
-  int currentAngle = myServo.read();
-  int step = (targetAngle > currentAngle) ? ServoAngleStep : -ServoAngleStep;
+  // int currentAngle = myServo.read();
+  // int step = (targetAngle > currentAngle) ? ServoAngleStep : -ServoAngleStep;
 
-  for (int angle = currentAngle; angle != targetAngle; angle += step) {
-    myServo.write(angle);
-    delay(ServoStepDelay);
-  }
+  // for (int angle = currentAngle; angle != targetAngle; angle += step) {
+  //   myServo.write(angle);
+  //   delay(ServoStepDelay);
+  // }
+  
   myServo.write(targetAngle); // Ensure exact position
+  delay(20);
 }
 
 
