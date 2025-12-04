@@ -192,7 +192,22 @@ def generate_launch_description():
                 "debug": True  # 👈 Add this line
             },
         ],
-    )
+        # ✔ ADD DEBUG LOG LEVELS HERE
+        arguments=[
+            "--ros-args",
+                "--log-level", "debug",
+                "--log-level", "rcl:=info",
+                "--log-level", "rclcpp:=info",
+                "--log-level", "rmw_fastrtps_cpp:=info",
+                "--log-level", "rmw:=info",
+                "--log-level", "rcutils:=info",
+                "--log-level", "move_group:=debug",
+                "--log-level", "moveit_kinematics:=debug",
+                "--log-level", "moveit_planners_ompl:=debug",
+                "--log-level", "moveit_ros_planning:=debug",
+                "--log-level", "moveit_core:=debug",
+                    ],
+                )
 
     # rviz with moveit configuration
     rviz_node = Node(

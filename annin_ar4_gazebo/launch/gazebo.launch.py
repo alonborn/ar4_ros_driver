@@ -182,5 +182,5 @@ def generate_launch_description():
         joint_state_broadcaster_spawner,
         initial_joint_controller_spawner_started,
         gripper_joint_controller_spawner_started,
-        realsense,
+        # realsense,
     ])
